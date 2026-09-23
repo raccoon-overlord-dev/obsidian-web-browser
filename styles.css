@@ -1,0 +1,32 @@
+.workspace-leaf-content[data-type='web-browser-view'] .view-content {
+	padding: 0;
+}
+
+.web-browser {
+	display: flex;
+	flex-direction: column;
+}
+
+.web-browser-toolbar {
+	display: flex;
+	align-items: center;
+	gap: var(--size-4-1);
+	padding: var(--size-4-1) var(--size-4-2);
+	border-bottom: var(--border-width) solid var(--background-modifier-border);
+}
+
+.web-browser-button:disabled {
+	opacity: 0.4;
+	cursor: default;
+}
+
+.web-browser-address {
+	flex: 1;
+	min-width: 0;
+}
+
+.web-browser-webview {
+	flex: 1;
+	width: 100%;
+	border: none;
+}

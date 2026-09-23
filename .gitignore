@@ -1,0 +1,28 @@
+# Allowlist: only the files needed to build, review and release the plugin are tracked.
+# Anything not listed here (planning docs, notes, experiments, secrets) stays local.
+/*
+!/src/
+!/test/
+!/.editorconfig
+!/.gitignore
+!/.npmrc
+!/esbuild.config.mjs
+!/eslint.config.mts
+!/LICENSE
+!/manifest.json
+!/package.json
+!/package-lock.json
+!/README.md
+!/styles.css
+!/tsconfig.json
+!/version-bump.mjs
+!/versions.json
+
+# Never tracked, even inside allowed folders
+.env
+.env.*
+LOCAL-NOTES.md
+data.json
+main.js
+*.map
+.DS_Store
