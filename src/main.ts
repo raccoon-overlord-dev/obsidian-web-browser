@@ -4,6 +4,7 @@ import { BLANK } from './BrowserTab';
 import { BrowserView, VIEW_TYPE_BROWSER } from './BrowserView';
 import { Bookmark, IMPORT_FOLDER, parseBookmarksFile } from './chrome';
 import { getRemote } from './electron';
+import { OpenUrlModal, routeLinks } from './links';
 import { ConfirmModal, WebBrowserSettingTab } from './settings';
 import { SEARCH_ENGINES, SEARCH_URL, SearchEngine, toUrl } from './url';
 
@@ -16,6 +17,8 @@ interface WebBrowserData {
 	homepage: string;
 	websiteTheme: WebsiteTheme;
 	faviconInTab: boolean;
+	/** Where http/https links clicked in notes open. */
+	openLinksIn: 'browser' | 'system';
 	bookmarks: Bookmark[];
 }
 
@@ -35,6 +38,7 @@ const DEFAULTS: WebBrowserData = {
 	homepage: '',
 	websiteTheme: 'auto',
 	faviconInTab: true,
+	openLinksIn: 'browser',
 	bookmarks: [],
 };
 
@@ -72,6 +76,9 @@ export default class WebBrowserPlugin extends Plugin {
 		this.registerView(VIEW_TYPE_BROWSER, (leaf) => new BrowserView(leaf, this));
 		this.addRibbonIcon('globe', 'Open new browser', () => void this.openBrowser());
 		this.addSettingTab(new WebBrowserSettingTab(this.app, this));
+		routeLinks(this, window);
+		this.registerEvent(this.app.workspace.on('window-open', (_ww, win) => routeLinks(this, win)));
+		this.addCommands();
 		// Website theme "auto" follows Obsidian's light/dark theme.
 		this.registerEvent(this.app.workspace.on('css-change', () => this.views().forEach((v) => v.applyTheme())));
 	}
@@ -80,10 +87,48 @@ export default class WebBrowserPlugin extends Plugin {
 		this.setPermissionHandler(false);
 	}
 
-	async openBrowser() {
+	/** Opens a new browser in a new Obsidian tab, on `url` or the homepage. */
+	async openBrowser(url?: string) {
 		const leaf = this.app.workspace.getLeaf('tab');
-		await leaf.setViewState({ type: VIEW_TYPE_BROWSER, active: true });
-		if (leaf.view instanceof BrowserView) leaf.view.focusAddress();
+		const state = url ? { tabs: [{ url }], active: 0 } : undefined;
+		await leaf.setViewState({ type: VIEW_TYPE_BROWSER, active: true, state });
+		if (!url && leaf.view instanceof BrowserView) leaf.view.focusAddress();
+	}
+
+	/** Opens `url` as a new tab in the active browser, or else in any open browser, or else in a new one. */
+	async openUrl(url: string) {
+		const leaves = this.app.workspace.getLeavesOfType(VIEW_TYPE_BROWSER);
+		const active = this.app.workspace.getActiveViewOfType(BrowserView)?.leaf;
+		const leaf = active ?? leaves[0];
+		if (!leaf) return this.openBrowser(url);
+		await leaf.loadIfDeferred();
+		await this.app.workspace.revealLeaf(leaf);
+		if (leaf.view instanceof BrowserView) leaf.view.openTab(url, true);
+	}
+
+	private addCommands() {
+		// No default hotkeys: users pick their own in Settings → Hotkeys.
+		this.addCommand({ id: 'open-new-browser', name: 'Open new browser', callback: () => void this.openBrowser() });
+		this.addCommand({ id: 'open-url', name: 'Open URL…', callback: () => new OpenUrlModal(this.app, this).open() });
+		this.addCommand({
+			id: 'new-tab',
+			name: 'New tab',
+			checkCallback: (checking) => {
+				const view = this.app.workspace.getActiveViewOfType(BrowserView);
+				if (view && !checking) view.newTab();
+				return !!view;
+			},
+		});
+		this.addCommand({
+			id: 'toggle-bookmark',
+			name: 'Toggle bookmark for current page',
+			checkCallback: (checking) => {
+				const view = this.app.workspace.getActiveViewOfType(BrowserView);
+				const page = view?.currentPage();
+				if (page && !checking) void this.toggleBookmark(page.url, page.title);
+				return !!page;
+			},
+		});
 	}
 
 	/** Called after a setting changed in the settings tab. */

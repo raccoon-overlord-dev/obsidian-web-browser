@@ -12,6 +12,19 @@ This plugin uses Electron's `<webview>` and does not work on Obsidian mobile.
 
 The plugin loads the web pages you open and the search engine you choose. It contacts no other service, collects no telemetry and shows no ads.
 
+## Commands and links
+
+Commands (no default hotkeys; assign your own in **Settings → Hotkeys**):
+
+- **Open new browser**
+- **Open URL…**: type an address or a search.
+- **New tab**: in the active browser.
+- **Toggle bookmark for current page**
+
+Web links (`http`/`https`) clicked in your notes open as a new tab in Web Browser. Change this with **Open web links from notes in** in the plugin settings to use your default browser instead. Internal links and other link types are not affected.
+
+> **Note:** while this setting is on **Web Browser**, it takes priority over the core **Web viewer** plugin's "Open external links" option: links in notes open in Web Browser, not in Web viewer. To use Web viewer for links, set **Open web links from notes in** to **Default browser**.
+
 ## Logins
 
 Logins persist between sessions. They are kept per vault, in Obsidian's app data on this computer, not inside the vault, so they do not sync between devices.
@@ -19,7 +32,7 @@ Logins persist between sessions. They are kept per vault, in Obsidian's app data
 Tested on macOS: GitHub, Gmail, Google Calendar and YouTube sign-in work, including Google's "tap yes on your phone" two-step check. Linux and Windows are not tested yet.
 
 - Google sign-in is best effort. Google can refuse sign-in from embedded browsers at any time. If it does, a bar above the page offers to continue in your default browser.
-- "Sign in with Google" buttons on other sites open Google in a small separate window, as in Chrome. It closes by itself when you are signed in.
+- "Sign in with Google" (or Apple, Microsoft…) buttons that open a pop-up window do not work: pop-ups open as a tab, and the site cannot finish the sign-in there (Notion, for example, reports blocked pop-ups). Use the site's email sign-in, or open the site in your default browser from the menu.
 - Passkeys stored in a password manager extension are not available, since extensions are not supported.
 
 ## Bookmarks

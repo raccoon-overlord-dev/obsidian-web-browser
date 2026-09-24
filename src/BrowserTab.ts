@@ -214,17 +214,14 @@ export class BrowserTab {
 		this.ready = true;
 		const contents = getRemote()?.webContents.fromId(this.webview.getWebContentsId());
 		this.contents = contents;
-		// New windows. setWindowOpenHandler cannot be used: through remote its answer arrives too late,
-		// so it can only deny, and a denied window.open returns null, which breaks "Sign in with Google"
-		// pop-ups (Notion reports blocked pop-ups). So Electron creates every window, then:
-		// - links meant for a tab (target=_blank, Cmd/Ctrl/middle-click) become a tab here; the window
-		//   is destroyed right away.
-		// - real pop-ups (window.open with a size, disposition "new-window") stay a window, keeping the
-		//   opener link the sign-in flow needs. They share this tab's partition, so logins land here.
-		contents?.on('did-create-window', (win, { url, disposition }) => {
-			if (disposition === 'new-window') return win.removeMenu();
-			win.destroy();
+		// Popups (target=_blank, window.open) open as a new tab in this panel. This handler must be set:
+		// without it Obsidian's own handler sends every new window to the system browser.
+		// Through remote the handler's return value arrives too late, so Electron always denies the
+		// window. A denied window.open returns null, so sign-in pop-ups that talk back to their opener
+		// ("Sign in with Google" on Notion) cannot work.
+		contents?.setWindowOpenHandler(({ url, disposition }) => {
 			if (this.ready) this.view.openTab(url, disposition !== 'background-tab', this);
+			return { action: 'deny' };
 		});
 		// Keys pressed inside the page never reach Obsidian's DOM, so the shortcuts are caught here.
 		contents?.on('before-input-event', (_e, input) => this.onKey(input));

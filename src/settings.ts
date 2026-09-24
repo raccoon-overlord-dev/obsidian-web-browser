@@ -54,6 +54,15 @@ export class WebBrowserSettingTab extends PluginSettingTab {
 				},
 			},
 			{
+				name: 'Open web links from notes in',
+				desc: 'Where http and https links clicked in your notes open. Internal links are not affected.',
+				control: {
+					type: 'dropdown',
+					key: 'openLinksIn',
+					options: { browser: 'Web Browser (new tab)', system: 'Default browser' },
+				},
+			},
+			{
 				name: 'Show the website icon on the Obsidian tab',
 				desc: 'Otherwise the Obsidian tab shows a globe.',
 				control: { type: 'toggle', key: 'faviconInTab' },

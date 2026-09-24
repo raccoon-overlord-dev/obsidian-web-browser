@@ -338,6 +338,12 @@ export class BrowserView extends ItemView {
 		setTooltip(this.starEl, starred ? 'Remove bookmark' : 'Bookmark this page');
 	}
 
+	/** The active tab's page, or null on a blank tab. */
+	currentPage() {
+		const tab = this.active;
+		return tab && tab.url !== BLANK ? { url: tab.url, title: tab.title } : null;
+	}
+
 	private toggleBookmark() {
 		const tab = this.active;
 		if (tab && tab.url !== BLANK) void this.plugin.toggleBookmark(tab.url, tab.title);
