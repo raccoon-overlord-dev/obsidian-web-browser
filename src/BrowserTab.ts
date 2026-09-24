@@ -2,6 +2,7 @@ import { Platform, setIcon, setTooltip } from 'obsidian';
 import { getRemote, KeyInput, WebContents, WebviewEvent, WebviewTag } from './electron';
 import type { BrowserView } from './BrowserView';
 import type { WebsiteTheme } from './main';
+import { describeLoadError } from './url';
 
 export const BLANK = 'about:blank';
 
@@ -45,6 +46,8 @@ export class BrowserTab {
 	typed: string | null = null;
 	ready = false;
 	loading = false;
+	/** Why the page could not be shown, or null. Shown by the view instead of a blank page. */
+	error: { title: string; detail: string } | null = null;
 	zoom: number;
 	theme: WebsiteTheme | null;
 	readonly el: HTMLElement;
@@ -104,7 +107,8 @@ export class BrowserTab {
 		// the saved URL was set and overwrite it.
 		this.webview = win.createEl('webview', {
 			cls: 'web-browser-webview',
-			attr: { partition: view.partition, allowpopups: '' },
+			// Pages get no Node access (the default) and run in Chromium's sandbox.
+			attr: { partition: view.partition, allowpopups: '', webpreferences: 'sandbox=yes, contextIsolation=yes' },
 		});
 		if (url !== BLANK) this.webview.setAttribute('src', url);
 
@@ -125,6 +129,18 @@ export class BrowserTab {
 			this.faviconSource = '';
 			this.applyPageSettings();
 			this.onNavigate(e.url);
+		});
+		on('did-fail-load', (e) => {
+			// -3 is ERR_ABORTED: the load was replaced by another one or became a download.
+			if (!e.isMainFrame || e.errorCode === -3) return;
+			if (e.validatedURL) this.url = e.validatedURL;
+			this.error = describeLoadError(e.errorCode ?? 0, e.errorDescription ?? '', this.url);
+			this.changed(true);
+		});
+		on('render-process-gone', (e) => {
+			if (e.reason === 'clean-exit') return;
+			this.error = { title: 'This page crashed', detail: 'Reload to try again.' };
+			this.changed(false);
 		});
 		on('media-started-playing', () => this.updateAudio());
 		on('media-paused', () => this.updateAudio());
@@ -293,8 +309,17 @@ export class BrowserTab {
 		this.changed(true);
 	}
 
+	/** Loads the current page again, also after a failed load or a crash. */
+	retry() {
+		this.error = null;
+		if (this.ready) this.webview.reload();
+		else this.webview.setAttribute('src', this.url);
+		this.changed(false);
+	}
+
 	private setLoading(loading: boolean) {
 		this.loading = loading;
+		if (loading) this.error = null;
 		this.changed(false);
 	}
 

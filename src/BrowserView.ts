@@ -51,6 +51,9 @@ export class BrowserView extends ItemView {
 	private starEl!: HTMLButtonElement;
 	private noticeEl!: HTMLElement;
 	private noticeTarget = '';
+	private errorEl!: HTMLElement;
+	private errorTitleEl!: HTMLElement;
+	private errorDetailEl!: HTMLElement;
 	/** Tab being dragged to a new position in the tab bar. */
 	private dragged: BrowserTab | null = null;
 	/** What the Obsidian tab header shows, to skip redundant (flickering) updates. */
@@ -128,7 +131,7 @@ export class BrowserView extends ItemView {
 		this.reloadEl = this.button(bar, 'rotate-cw', 'Reload', () => {
 			const tab = this.active;
 			if (tab?.loading) tab.webview.stop();
-			else if (tab?.ready) tab.webview.reload();
+			else tab?.retry();
 		});
 		this.addressEl = bar.createEl('input', {
 			type: 'text',
@@ -171,6 +174,18 @@ export class BrowserView extends ItemView {
 		this.registerDomEvent(noticeButton, 'click', () => void getRemote()?.shell.openExternal(this.noticeTarget));
 
 		this.pagesEl = root.createDiv({ cls: 'web-browser-pages' });
+		// Covers the page when it failed to load or crashed, instead of leaving it blank.
+		this.errorEl = this.pagesEl.createDiv({ cls: 'web-browser-error' });
+		this.errorTitleEl = this.errorEl.createEl('h3');
+		this.errorDetailEl = this.errorEl.createEl('p');
+		const errorButtons = this.errorEl.createDiv({ cls: 'web-browser-error-buttons' });
+		const retry = errorButtons.createEl('button', { cls: 'mod-cta', text: 'Try again' });
+		this.registerDomEvent(retry, 'click', () => this.active?.retry());
+		const external = errorButtons.createEl('button', { text: 'Open in default browser' });
+		this.registerDomEvent(external, 'click', () => {
+			const url = this.active?.url;
+			if (url && /^https?:/i.test(url)) void getRemote()?.shell.openExternal(url);
+		});
 		this.restore(this.pending ?? { tabs: [{ url: this.plugin.homeUrl }], active: 0 });
 		this.pending = null;
 	}
@@ -328,6 +343,9 @@ export class BrowserView extends ItemView {
 		const loading = !!tab?.loading;
 		setIcon(this.reloadEl, loading ? 'x' : 'rotate-cw');
 		setTooltip(this.reloadEl, loading ? 'Stop' : 'Reload');
+		this.errorEl.toggleClass('is-visible', !!tab?.error);
+		this.errorTitleEl.setText(tab?.error?.title ?? '');
+		this.errorDetailEl.setText(tab?.error?.detail ?? '');
 		const blocked = tab ? googleSignInBlocked(tab.url) : null;
 		this.noticeTarget = blocked ?? '';
 		this.noticeEl.toggleClass('is-visible', !!blocked);

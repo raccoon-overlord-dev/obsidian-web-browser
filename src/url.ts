@@ -40,3 +40,26 @@ export function googleSignInBlocked(url: string): string | null {
 	const next = u.searchParams.get('continue');
 	return next && /^https:\/\//i.test(next) ? next : 'https://accounts.google.com/';
 }
+
+/** Readable text for a failed main-frame load (Chromium net error codes). */
+export function describeLoadError(code: number, description: string, url: string) {
+	let host = url;
+	try {
+		host = new URL(url).host || url;
+	} catch {
+		// Keep the raw URL.
+	}
+	const name = description || `error ${code}`;
+	// -200 to -299 are certificate errors.
+	if (code <= -200 && code > -300) {
+		return {
+			title: 'This connection is not secure',
+			detail: `${host} has an invalid security certificate (${name}). Web Browser does not open sites with certificate errors.`,
+		};
+	}
+	if (code === -106) return { title: 'No internet connection', detail: `Could not load ${host} (${name}).` };
+	if (code === -105 || code === -137) {
+		return { title: "This site can't be found", detail: `The address ${host} could not be found (${name}).` };
+	}
+	return { title: "This page can't be reached", detail: `${host}: ${name}.` };
+}

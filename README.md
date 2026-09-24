@@ -12,6 +12,8 @@ This plugin uses Electron's `<webview>` and does not work on Obsidian mobile.
 
 The plugin loads the web pages you open and the search engine you choose. It contacts no other service, collects no telemetry and shows no ads.
 
+Websites run in Chromium's sandbox with no access to Node.js, your vault or your files. Outside the vault, the plugin only reads a browser bookmarks file, and only when you import one (see [Importing from Chrome](#importing-from-chrome)).
+
 ## Commands and links
 
 Commands (no default hotkeys; assign your own in **Settings → Hotkeys**):

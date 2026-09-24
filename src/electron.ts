@@ -33,6 +33,10 @@ export interface WebviewEvent extends Event {
 	title?: string;
 	isMainFrame?: boolean;
 	favicons?: string[];
+	errorCode?: number;
+	errorDescription?: string;
+	validatedURL?: string;
+	reason?: string;
 }
 
 interface Session {

@@ -97,6 +97,7 @@
 }
 
 .web-browser-pages {
+	position: relative;
 	display: flex;
 	flex: 1;
 	min-height: 0;
@@ -208,4 +209,33 @@
 
 .web-browser-open-url {
 	width: 100%;
+}
+
+.web-browser-error {
+	position: absolute;
+	inset: 0;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	gap: var(--size-4-2);
+	padding: var(--size-4-8);
+	text-align: center;
+	background-color: var(--background-primary);
+	color: var(--text-normal);
+}
+
+.web-browser-error:not(.is-visible) {
+	display: none;
+}
+
+.web-browser-error p {
+	max-width: 40em;
+	color: var(--text-muted);
+	overflow-wrap: anywhere;
+}
+
+.web-browser-error-buttons {
+	display: flex;
+	gap: var(--size-4-2);
 }
