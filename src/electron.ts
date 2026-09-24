@@ -100,8 +100,10 @@ interface Remote {
 /** Obsidian exposes Electron's remote module to plugins. */
 export function getRemote(): Remote | null {
 	try {
-		// eslint-disable-next-line @typescript-eslint/no-require-imports -- electron is only reachable through Node require at runtime
-		return (require('electron') as { remote?: Remote }).remote ?? null;
+		// Electron is only reachable through the renderer's require. Typed here, so the plugin does not
+		// depend on Node's type definitions.
+		const load = (window as unknown as { require?: (id: string) => unknown }).require;
+		return (load?.('electron') as { remote?: Remote } | undefined)?.remote ?? null;
 	} catch {
 		return null;
 	}

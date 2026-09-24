@@ -15,6 +15,8 @@ export default defineConfig(
 		'package.json',
 		'package-lock.json',
 		'tsconfig.json',
+		// Tooling config, not plugin code. It uses Node's import.meta.dirname, and the project has no Node types.
+		'eslint.config.mts',
 	]),
 	{
 		languageOptions: {
@@ -23,7 +25,7 @@ export default defineConfig(
 			},
 			parserOptions: {
 				projectService: {
-					allowDefaultProject: ['eslint.config.mts', 'manifest.json'],
+					allowDefaultProject: ['manifest.json'],
 				},
 				tsconfigRootDir: import.meta.dirname,
 				extraFileExtensions: ['.json'],

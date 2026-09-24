@@ -78,7 +78,7 @@ export class WebBrowserSettingTab extends PluginSettingTab {
 				items: [
 					{
 						name: 'Import bookmarks from Chrome',
-						desc: `Reads the bookmarks file of Google Chrome or Chromium on this computer, outside the vault. Read-only, and only when you import. Importing again replaces the "${IMPORT_FOLDER}" folder.`,
+						desc: `Pick a bookmarks HTML export from any browser, or Chrome's own bookmarks file. Only the file you pick is read. Importing again replaces the "${IMPORT_FOLDER}" folder.`,
 						action: () => this.plugin.openChromeImport(),
 					},
 				],

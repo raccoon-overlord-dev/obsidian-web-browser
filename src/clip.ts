@@ -1,5 +1,5 @@
 import { isProbablyReaderable, Readability } from '@mozilla/readability';
-import { htmlToMarkdown, moment, normalizePath, Notice } from 'obsidian';
+import { htmlToMarkdown, normalizePath, Notice } from 'obsidian';
 import type { BrowserTab } from './BrowserTab';
 import type WebBrowserPlugin from './main';
 
@@ -37,6 +37,13 @@ function parse(html: string, url: string) {
 		}
 	}
 	return doc;
+}
+
+/** Today's local date as YYYY-MM-DD. */
+function today() {
+	const d = new Date();
+	const pad = (n: number) => String(n).padStart(2, '0');
+	return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
 
 /** A file name from a page title: no characters that are invalid in file names or Obsidian links. */
@@ -99,7 +106,7 @@ export async function clipPage(plugin: WebBrowserPlugin, tab: BrowserTab) {
 		fm.source = page.url;
 		if (byline) fm.author = byline;
 		if (published) fm.published = published;
-		fm.clipped = moment().format('YYYY-MM-DD');
+		fm.clipped = today();
 	});
 	await app.workspace.getLeaf('tab').openFile(file);
 }

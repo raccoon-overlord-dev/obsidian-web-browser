@@ -1,5 +1,5 @@
-import { App, Modal, Notice, SearchComponent, setIcon, Setting, setTooltip } from 'obsidian';
-import { Bookmark, BOOKMARKS_FILE, findChromeProfiles, IMPORT_FOLDER, readBookmarksFile } from './chrome';
+import { App, Modal, Notice, Platform, SearchComponent, setIcon, Setting, setTooltip } from 'obsidian';
+import { Bookmark, BOOKMARKS_FILE, IMPORT_FOLDER } from './chrome';
 import type WebBrowserPlugin from './main';
 import { ConfirmModal } from './settings';
 
@@ -150,6 +150,17 @@ export class BookmarksModal extends Modal {
 	}
 }
 
+/** Where Chrome keeps its bookmarks file on this OS, and how to reach that hidden folder in the file picker. */
+function chromeFileHint() {
+	if (Platform.isMacOS) {
+		return 'it is in ~/Library/Application Support/Google/Chrome/Default (or "Profile 1", "Profile 2"… for other profiles). Press Cmd+Shift+. in the file picker to show hidden folders.';
+	}
+	if (Platform.isWin) {
+		return 'type %LOCALAPPDATA%\\Google\\Chrome\\User Data\\Default in the file picker\'s address bar (or "Profile 1"… for other profiles).';
+	}
+	return 'it is in ~/.config/google-chrome/Default, or ~/.config/chromium/Default for Chromium ("Profile 1"… for other profiles). Press Ctrl+H in the file picker to show hidden folders.';
+}
+
 export class ChromeImportModal extends Modal {
 	constructor(
 		app: App,
@@ -159,35 +170,22 @@ export class ChromeImportModal extends Modal {
 		this.setTitle('Import bookmarks from Chrome');
 		const { contentEl } = this;
 		contentEl.createEl('p', {
-			text: 'This reads the bookmarks file of Google Chrome or Chromium on this computer. The file is outside your vault. It is only read, never changed, and only when you click import.',
+			text: 'Pick a bookmarks file. The plugin reads only the file you pick, only once, and never changes it.',
 		});
 		contentEl.createEl('p', {
 			text: `Bookmarks go into the "${IMPORT_FOLDER}" folder. Importing again replaces that folder; your own bookmarks are not touched.`,
 		});
+		const help = contentEl.createEl('ul');
+		help.createEl('li', {
+			text: 'Easiest, from any browser: export your bookmarks as an HTML file. In Chrome, open the bookmark manager, then use the ⋮ menu to export.',
+		});
+		help.createEl('li', { text: `Or pick Chrome's own "${BOOKMARKS_FILE}" file: ${chromeFileHint()}` });
 
-		let profiles: ReturnType<typeof findChromeProfiles> = [];
-		try {
-			profiles = findChromeProfiles();
-		} catch (err) {
-			console.error('Web Browser: could not look for Chrome profiles.', err);
-		}
-		if (!profiles.length) contentEl.createEl('p', { text: 'No Chrome or Chromium profile was found on this computer.' });
-		for (const profile of profiles) {
-			new Setting(contentEl)
-				.setName(profile.label)
-				.addButton((b) =>
-					b
-						.setButtonText('Import')
-						.setCta()
-						.onClick(() => void this.import(() => readBookmarksFile(profile.path), profile.label)),
-				);
-		}
-
-		new Setting(contentEl)
-			.setName('Another file')
-			.setDesc(`A bookmarks HTML file exported from any browser, or the file named "${BOOKMARKS_FILE}" in the profile folder of a Chromium-based browser such as Edge, Brave or Vivaldi.`)
-			.addButton((b) =>
-				b.setButtonText('Choose file…').onClick(() => {
+		new Setting(contentEl).setName('Bookmarks file').addButton((b) =>
+			b
+				.setButtonText('Choose file…')
+				.setCta()
+				.onClick(() => {
 					const input = createEl('input', { type: 'file' });
 					input.addEventListener('change', () => {
 						const file = input.files?.[0];
@@ -195,7 +193,7 @@ export class ChromeImportModal extends Modal {
 					});
 					input.click();
 				}),
-			);
+		);
 	}
 
 	private async import(read: () => string | Promise<string>, source: string) {

@@ -33,7 +33,7 @@ Manually: download `main.js`, `manifest.json` and `styles.css` from the [latest 
 
 The plugin loads the web pages you open and the search engine you choose. It contacts no other service, collects no telemetry and shows no ads.
 
-Websites run in Chromium's sandbox with no access to Node.js, your vault or your files. Outside the vault, the plugin only reads a browser bookmarks file, and only when you import one (see [Importing from Chrome](#importing-from-chrome)).
+Websites run in Chromium's sandbox with no access to Node.js, your vault or your files. It does not access your file system directly: outside the vault, it only reads a bookmarks file that you pick yourself in the file picker (see [Importing from Chrome](#importing-from-chrome)).
 
 ## Commands and links
 
@@ -74,7 +74,12 @@ Add or remove the current page with the star in the address bar. Open, search an
 
 ### Importing from Chrome
 
-**Import bookmarks from Chrome** (in the menu or the plugin settings) reads the `Bookmarks` file of Google Chrome or Chromium on your computer. This file is **outside your vault**. The plugin only reads it, never changes it, and only when you click import. The file's location is not saved. You can also pick a file by hand: a bookmarks HTML file exported from any browser, or the `Bookmarks` file of another Chromium-based browser.
+**Import bookmarks from Chrome** (in the menu or the plugin settings) asks you to pick a file:
+
+- a bookmarks HTML export from any browser (in Chrome: bookmark manager → ⋮ → Export bookmarks), or
+- the `Bookmarks` file of Chrome or another Chromium-based browser. The import window shows where it is on your system.
+
+The plugin reads only the file you pick, once, and never changes it or remembers where it was.
 
 Imported bookmarks go into an "Imported from Chrome" folder, keeping Chrome's folder structure. Importing again replaces that folder and leaves your own bookmarks alone.
 

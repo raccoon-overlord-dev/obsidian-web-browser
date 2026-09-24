@@ -1,8 +1,5 @@
-// Chrome bookmark import. Reads Chrome's own `Bookmarks` file (read-only, only when the user imports).
-// Kept free of Obsidian imports so the parser can be tested with plain Node.
-import { existsSync, readdirSync, readFileSync } from 'fs';
-import { homedir } from 'os';
-import { join } from 'path';
+// Bookmark import parsers. The user picks the file; this module never touches the file system.
+// Kept free of Obsidian imports so the parsers can be tested with plain Node.
 
 /** Top-level folder that holds imported bookmarks. Re-importing replaces it. */
 export const IMPORT_FOLDER = 'Imported from Chrome';
@@ -14,12 +11,6 @@ export interface Bookmark {
 	url: string;
 	/** Folder path from the root, for example ['Imported from Chrome', 'Bookmarks bar']. Empty for the root. */
 	folder: string[];
-}
-
-export interface ChromeProfile {
-	/** For example "Google Chrome: Work". */
-	label: string;
-	path: string;
 }
 
 interface ChromeNode {
@@ -96,56 +87,4 @@ export function parseChromeBookmarks(json: string, root: string[]): Bookmark[] {
 		if (node) walk(node, root);
 	}
 	return out;
-}
-
-/** Chrome and Chromium user data folders for this OS. */
-function browserDirs(): [string, string][] {
-	const home = homedir();
-	if (process.platform === 'darwin') {
-		const base = join(home, 'Library', 'Application Support');
-		return [
-			['Google Chrome', join(base, 'Google', 'Chrome')],
-			['Chromium', join(base, 'Chromium')],
-		];
-	}
-	if (process.platform === 'win32') {
-		const base = process.env.LOCALAPPDATA ?? join(home, 'AppData', 'Local');
-		return [
-			['Google Chrome', join(base, 'Google', 'Chrome', 'User Data')],
-			['Chromium', join(base, 'Chromium', 'User Data')],
-		];
-	}
-	const base = process.env.XDG_CONFIG_HOME ?? join(home, '.config');
-	return [
-		['Google Chrome', join(base, 'google-chrome')],
-		['Chromium', join(base, 'chromium')],
-	];
-}
-
-/** Every Chrome/Chromium profile on this machine that has a `Bookmarks` file. Paths are detected fresh each time. */
-export function findChromeProfiles(): ChromeProfile[] {
-	const profiles: ChromeProfile[] = [];
-	for (const [browser, dir] of browserDirs()) {
-		if (!existsSync(dir)) continue;
-		// "Local State" maps profile folders to the names shown in Chrome.
-		let names: Record<string, { name?: string } | undefined> = {};
-		try {
-			const state = JSON.parse(readFileSync(join(dir, 'Local State'), 'utf8')) as {
-				profile?: { info_cache?: typeof names };
-			};
-			names = state.profile?.info_cache ?? {};
-		} catch {
-			// No names; fall back to folder names.
-		}
-		for (const entry of readdirSync(dir)) {
-			if (entry !== 'Default' && !/^Profile \d+$/.test(entry)) continue;
-			const path = join(dir, entry, BOOKMARKS_FILE);
-			if (existsSync(path)) profiles.push({ label: `${browser}: ${names[entry]?.name || entry}`, path });
-		}
-	}
-	return profiles;
-}
-
-export function readBookmarksFile(path: string) {
-	return readFileSync(path, 'utf8');
 }

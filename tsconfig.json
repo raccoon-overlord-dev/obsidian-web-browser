@@ -13,7 +13,9 @@
 		"skipLibCheck": true,
 		"forceConsistentCasingInFileNames": true,
 		"allowSyntheticDefaultImports": true,
-		"lib": ["ES2021", "DOM"]
+		"lib": ["ES2021", "DOM"],
+		// No Node.js types: the plugin must not rely on them (Obsidian's review runs without them).
+		"types": []
 	},
 	"include": ["src/**/*.ts"]
 }

@@ -1,7 +1,7 @@
 {
 	"id": "web-browser",
 	"name": "Web Browser",
-	"version": "1.0.0",
+	"version": "1.0.1",
 	"minAppVersion": "1.13.7",
 	"description": "Browse the web in a tabbed panel, with persistent logins, bookmarks, Chrome bookmark import and page clipping to notes.",
 	"author": "raccoon-overlord-dev",
