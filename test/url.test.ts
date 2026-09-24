@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { toUrl } from '../src/url.ts';
+import { SEARCH_ENGINES, toUrl } from '../src/url.ts';
 
 const S = 'https://search.test/?q=';
 
@@ -16,4 +16,5 @@ test('toUrl', () => {
 	assert.equal(toUrl('obsidian plugins', S), S + 'obsidian%20plugins');
 	assert.equal(toUrl('typescript', S), S + 'typescript');
 	assert.equal(toUrl('what is 2.5 in hex', S), S + 'what%20is%202.5%20in%20hex');
+	assert.equal(toUrl('a b', SEARCH_ENGINES.startpage.url), 'https://www.startpage.com/sp/search?query=a%20b');
 });

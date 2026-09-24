@@ -1,14 +1,17 @@
-import { ItemView, Scope, setIcon, setTooltip, ViewStateResult, WorkspaceLeaf } from 'obsidian';
-import { BLANK, BrowserTab, setFavicon } from './BrowserTab';
+import { ItemView, Menu, Scope, setIcon, setTooltip, ViewStateResult, WorkspaceLeaf } from 'obsidian';
+import { BLANK, BrowserTab, setFavicon, TabOptions } from './BrowserTab';
+import { getRemote } from './electron';
 import type WebBrowserPlugin from './main';
+import type { WebsiteTheme } from './main';
 import { toUrl } from './url';
 
 export const VIEW_TYPE_BROWSER = 'web-browser-view';
 
-interface SavedTab {
+interface SavedTab extends TabOptions {
 	url: string;
-	title: string;
 }
+
+const THEMES: WebsiteTheme[] = ['auto', 'light', 'dark'];
 
 interface SavedTabs {
 	tabs: SavedTab[];
@@ -20,7 +23,12 @@ function parseState(state: unknown): SavedTabs | null {
 	if (Array.isArray(s?.tabs)) {
 		const tabs = (s.tabs as Partial<SavedTab>[])
 			.filter((t) => typeof t?.url === 'string')
-			.map((t) => ({ url: t.url!, title: typeof t.title === 'string' ? t.title : '' }));
+			.map((t) => ({
+				url: t.url!,
+				title: typeof t.title === 'string' ? t.title : '',
+				zoom: typeof t.zoom === 'number' && t.zoom > 0 ? t.zoom : 1,
+				theme: THEMES.includes(t.theme as WebsiteTheme) ? t.theme : null,
+			}));
 		if (tabs.length) return { tabs, active: typeof s.active === 'number' ? s.active : 0 };
 	}
 	// State saved by earlier versions: a single URL.
@@ -44,7 +52,7 @@ export class BrowserView extends ItemView {
 
 	constructor(
 		leaf: WorkspaceLeaf,
-		private plugin: WebBrowserPlugin,
+		readonly plugin: WebBrowserPlugin,
 	) {
 		super(leaf);
 		// Not a navigation view: opening a note must not replace the browser.
@@ -80,7 +88,7 @@ export class BrowserView extends ItemView {
 	getState() {
 		return {
 			...super.getState(),
-			tabs: this.tabs.map((t): SavedTab => ({ url: t.url, title: t.title })),
+			tabs: this.tabs.map((t): SavedTab => ({ url: t.url, title: t.title, zoom: t.zoom, theme: t.theme })),
 			active: this.active ? this.tabs.indexOf(this.active) : 0,
 		};
 	}
@@ -120,6 +128,7 @@ export class BrowserView extends ItemView {
 			cls: 'web-browser-address',
 			attr: { placeholder: 'Search or enter address', spellcheck: 'false' },
 		});
+		const menuEl = this.button(bar, 'menu', 'Menu', () => this.openMenu(menuEl));
 		this.registerDomEvent(this.addressEl, 'focus', () => this.addressEl.select());
 		this.registerDomEvent(this.addressEl, 'input', () => {
 			if (this.active) this.active.typed = this.addressEl.value;
@@ -128,7 +137,7 @@ export class BrowserView extends ItemView {
 			const tab = this.active;
 			if (!tab) return;
 			if (e.key === 'Enter') {
-				const url = toUrl(this.addressEl.value);
+				const url = toUrl(this.addressEl.value, this.plugin.searchUrl);
 				if (url) {
 					tab.navigate(url);
 					tab.webview.focus();
@@ -145,21 +154,22 @@ export class BrowserView extends ItemView {
 		});
 
 		this.pagesEl = root.createDiv({ cls: 'web-browser-pages' });
-		this.restore(this.pending ?? { tabs: [{ url: BLANK, title: '' }], active: 0 });
+		this.restore(this.pending ?? { tabs: [{ url: this.plugin.homeUrl }], active: 0 });
 		this.pending = null;
 	}
 
 	async onClose() {
+		for (const tab of this.tabs) tab.destroy();
 		this.tabs = [];
 		this.active = null;
 		this.tabsEl = null;
 		this.contentEl.empty();
 	}
 
-	openTab(url: string, activate: boolean, after?: BrowserTab, title = '') {
+	openTab(url: string, activate: boolean, after?: BrowserTab, options: TabOptions = {}) {
 		if (!this.tabsEl) return;
 		const index = after ? this.tabs.indexOf(after) + 1 : this.tabs.length;
-		const tab = new BrowserTab(this, this.tabsEl, this.pagesEl, index, url, title);
+		const tab = new BrowserTab(this, this.tabsEl, this.pagesEl, index, url, options);
 		this.tabs.splice(index, 0, tab);
 		if (activate) this.activate(tab);
 		void this.app.workspace.requestSaveLayout();
@@ -167,8 +177,29 @@ export class BrowserView extends ItemView {
 	}
 
 	newTab() {
-		this.openTab(BLANK, true);
-		this.focusAddress();
+		const tab = this.openTab(this.plugin.homeUrl, true);
+		if (tab?.url === BLANK) this.focusAddress();
+	}
+
+	applyTheme() {
+		for (const tab of this.tabs) tab.applyTheme();
+	}
+
+	onSettingsChange() {
+		this.applyTheme();
+		this.updateHeader(true);
+	}
+
+	/** After all stored data was deleted: drop back/forward history and reload every tab. */
+	clearHistory() {
+		for (const tab of this.tabs) tab.clearHistory();
+		this.updateButtons();
+	}
+
+	/** Recreates every tab, for example after the partition changed. */
+	rebuild() {
+		const saved = parseState(this.getState());
+		if (saved) this.restore(saved, true);
 	}
 
 	closeTab(tab: BrowserTab) {
@@ -208,15 +239,15 @@ export class BrowserView extends ItemView {
 		this.updateHeader();
 	}
 
-	private restore(saved: SavedTabs) {
+	private restore(saved: SavedTabs, force = false) {
 		// Obsidian can pass back the state it already has; do not reload every page for that.
 		const same =
 			saved.tabs.length === this.tabs.length && saved.tabs.every((t, i) => t.url === this.tabs[i]!.url);
-		if (same) return;
+		if (same && !force) return;
 		for (const tab of this.tabs) tab.destroy();
 		this.tabs = [];
 		this.active = null;
-		for (const t of saved.tabs) this.openTab(t.url, false, undefined, t.title);
+		for (const t of saved.tabs) this.openTab(t.url, false, undefined, t);
 		const active = this.tabs[Math.min(Math.max(saved.active, 0), this.tabs.length - 1)];
 		if (active) this.activate(active);
 	}
@@ -236,12 +267,63 @@ export class BrowserView extends ItemView {
 		setTooltip(this.reloadEl, loading ? 'Stop' : 'Reload');
 	}
 
-	private updateHeader() {
+	private openMenu(anchor: HTMLElement) {
+		const tab = this.active;
+		if (!tab) return;
+		// Ctrl+scroll or pinch can change the zoom inside the page.
+		if (tab.ready) tab.zoom = tab.webview.getZoomFactor();
+		const menu = new Menu();
+		menu.addItem((i) => i.setTitle('Zoom in').setIcon('zoom-in').onClick(() => tab.zoomBy(1)));
+		menu.addItem((i) => i.setTitle('Zoom out').setIcon('zoom-out').onClick(() => tab.zoomBy(-1)));
+		menu.addItem((i) =>
+			i
+				.setTitle(`Reset zoom (now ${Math.round(tab.zoom * 100)}%)`)
+				.setIcon('rotate-ccw')
+				.onClick(() => tab.setZoom(1)),
+		);
+		menu.addSeparator();
+		const labels: Record<WebsiteTheme, string> = {
+			auto: 'Website theme: auto (follow Obsidian)',
+			light: 'Website theme: light',
+			dark: 'Website theme: dark',
+		};
+		for (const theme of THEMES) {
+			menu.addItem((i) =>
+				i
+					.setTitle(labels[theme])
+					.setChecked(tab.effectiveTheme === theme)
+					.onClick(() => tab.setTheme(theme)),
+			);
+		}
+		menu.addSeparator();
+		menu.addItem((i) =>
+			i
+				.setTitle('Open in default browser')
+				.setIcon('external-link')
+				.setDisabled(!/^https?:/i.test(tab.url))
+				.onClick(() => void getRemote()?.shell.openExternal(tab.url)),
+		);
+		menu.addSeparator();
+		menu.addItem((i) => i.setTitle('Clear cache').setIcon('eraser').onClick(() => void this.plugin.clearCache()));
+		menu.addItem((i) =>
+			i
+				.setTitle('Delete all stored data…')
+				.setIcon('trash-2')
+				.setWarning(true)
+				.onClick(() => this.plugin.confirmDeleteAllData()),
+		);
+		menu.addSeparator();
+		menu.addItem((i) => i.setTitle('Settings').setIcon('settings').onClick(() => this.plugin.openSettings()));
+		const rect = anchor.getBoundingClientRect();
+		menu.showAtPosition({ x: rect.right, y: rect.bottom, left: true }, anchor.ownerDocument);
+	}
+
+	private updateHeader(force = false) {
 		// None of these are in the public API. updateHeader refreshes the Obsidian tab title,
 		// titleEl is the view header title, tabHeaderInnerIconEl is the Obsidian tab icon.
 		const title = this.getDisplayText();
-		const favicon = this.active?.favicon ?? '';
-		if (title === this.header.title && favicon === this.header.favicon) return;
+		const favicon = this.plugin.settings.faviconInTab ? (this.active?.favicon ?? '') : '';
+		if (!force && title === this.header.title && favicon === this.header.favicon) return;
 		this.header = { title, favicon };
 		(this as unknown as { titleEl?: HTMLElement }).titleEl?.setText(title);
 		const leaf = this.leaf as unknown as { updateHeader?: () => void; tabHeaderInnerIconEl?: HTMLElement };

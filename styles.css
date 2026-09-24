@@ -81,9 +81,14 @@
 	font-size: var(--font-ui-small);
 }
 
-.web-browser-tab-close {
+.web-browser-tab-close,
+.web-browser-tab-audio {
 	flex-shrink: 0;
 	padding: 0;
+}
+
+.web-browser-tab-audio:not(.is-visible) {
+	display: none;
 }
 
 .web-browser-favicon {

@@ -9,6 +9,12 @@ export interface WebviewTag extends HTMLElement {
 	goForward(): void;
 	reload(): void;
 	stop(): void;
+	clearHistory(): void;
+	getZoomFactor(): number;
+	setZoomFactor(factor: number): void;
+	isAudioMuted(): boolean;
+	setAudioMuted(muted: boolean): void;
+	isCurrentlyAudible(): boolean;
 }
 
 declare global {
@@ -33,7 +39,9 @@ interface Session {
 	setPermissionRequestHandler(
 		handler: ((webContents: unknown, permission: string, callback: (granted: boolean) => void) => void) | null,
 	): void;
-	on(event: 'before-input-event', listener: (event: unknown, input: KeyInput) => void): void;
+	clearCache(): Promise<void>;
+	clearStorageData(): Promise<void>;
+	clearAuthCache(): Promise<void>;
 }
 
 export interface KeyInput {
@@ -45,16 +53,23 @@ export interface KeyInput {
 	shift: boolean;
 }
 
-interface WebContents {
+export interface WebContents {
 	setWindowOpenHandler(
 		handler: (details: { url: string; disposition: string }) => { action: 'allow' | 'deny' },
 	): void;
 	on(event: 'before-input-event', listener: (event: unknown, input: KeyInput) => void): void;
+	on(event: 'audio-state-changed', listener: () => void): void;
+	debugger: {
+		isAttached(): boolean;
+		attach(protocolVersion: string): void;
+		sendCommand(method: string, params: object): Promise<unknown>;
+	};
 }
 
 interface Remote {
 	session: { fromPartition(partition: string): Session };
 	webContents: { fromId(id: number): WebContents | undefined };
+	shell: { openExternal(url: string): Promise<void> };
 }
 
 /** Obsidian exposes Electron's remote module to plugins. */
