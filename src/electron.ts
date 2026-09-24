@@ -18,6 +18,7 @@ declare global {
 	// Obsidian installs its DOM helpers on every window, including pop-outs.
 	interface Window {
 		createEl: typeof createEl;
+		createDiv: typeof createDiv;
 	}
 }
 
@@ -25,16 +26,30 @@ export interface WebviewEvent extends Event {
 	url?: string;
 	title?: string;
 	isMainFrame?: boolean;
+	favicons?: string[];
 }
 
 interface Session {
 	setPermissionRequestHandler(
 		handler: ((webContents: unknown, permission: string, callback: (granted: boolean) => void) => void) | null,
 	): void;
+	on(event: 'before-input-event', listener: (event: unknown, input: KeyInput) => void): void;
+}
+
+export interface KeyInput {
+	type: string;
+	key: string;
+	control: boolean;
+	meta: boolean;
+	alt: boolean;
+	shift: boolean;
 }
 
 interface WebContents {
-	setWindowOpenHandler(handler: (details: { url: string }) => { action: 'allow' | 'deny' }): void;
+	setWindowOpenHandler(
+		handler: (details: { url: string; disposition: string }) => { action: 'allow' | 'deny' },
+	): void;
+	on(event: 'before-input-event', listener: (event: unknown, input: KeyInput) => void): void;
 }
 
 interface Remote {

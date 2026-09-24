@@ -1,22 +1,46 @@
-import { ItemView, setIcon, setTooltip, ViewStateResult, WorkspaceLeaf } from 'obsidian';
-import { getRemote, WebviewEvent, WebviewTag } from './electron';
+import { ItemView, Scope, setIcon, setTooltip, ViewStateResult, WorkspaceLeaf } from 'obsidian';
+import { BLANK, BrowserTab, setFavicon } from './BrowserTab';
 import type WebBrowserPlugin from './main';
 import { toUrl } from './url';
 
 export const VIEW_TYPE_BROWSER = 'web-browser-view';
 
-const BLANK = 'about:blank';
+interface SavedTab {
+	url: string;
+	title: string;
+}
+
+interface SavedTabs {
+	tabs: SavedTab[];
+	active: number;
+}
+
+function parseState(state: unknown): SavedTabs | null {
+	const s = state as { tabs?: unknown; active?: unknown; url?: unknown } | null;
+	if (Array.isArray(s?.tabs)) {
+		const tabs = (s.tabs as Partial<SavedTab>[])
+			.filter((t) => typeof t?.url === 'string')
+			.map((t) => ({ url: t.url!, title: typeof t.title === 'string' ? t.title : '' }));
+		if (tabs.length) return { tabs, active: typeof s.active === 'number' ? s.active : 0 };
+	}
+	// State saved by earlier versions: a single URL.
+	if (typeof s?.url === 'string') return { tabs: [{ url: s.url, title: '' }], active: 0 };
+	return null;
+}
 
 export class BrowserView extends ItemView {
-	private webview!: WebviewTag;
+	private tabs: BrowserTab[] = [];
+	private active: BrowserTab | null = null;
+	/** State that arrived before onOpen built the panel. */
+	private pending: SavedTabs | null = null;
+	private tabsEl: HTMLElement | null = null;
+	private pagesEl!: HTMLElement;
 	private addressEl!: HTMLInputElement;
 	private backEl!: HTMLButtonElement;
 	private forwardEl!: HTMLButtonElement;
 	private reloadEl!: HTMLButtonElement;
-	private url = BLANK;
-	private title = '';
-	private ready = false;
-	private loading = false;
+	/** What the Obsidian tab header shows, to skip redundant (flickering) updates. */
+	private header = { title: '', favicon: '' };
 
 	constructor(
 		leaf: WorkspaceLeaf,
@@ -25,6 +49,20 @@ export class BrowserView extends ItemView {
 		super(leaf);
 		// Not a navigation view: opening a note must not replace the browser.
 		this.navigation = false;
+		// Shortcuts while focus is on the tab bar or toolbar. Inside a page, BrowserTab catches them.
+		this.scope = new Scope(this.app.scope);
+		this.scope.register(['Mod'], 't', () => {
+			this.newTab();
+			return false;
+		});
+		this.scope.register(['Mod'], 'w', () => {
+			if (this.active) this.closeTab(this.active);
+			return false;
+		});
+	}
+
+	get partition() {
+		return this.plugin.partition;
 	}
 
 	getViewType() {
@@ -32,7 +70,7 @@ export class BrowserView extends ItemView {
 	}
 
 	getDisplayText() {
-		return this.title || 'New tab';
+		return this.active?.title || 'New tab';
 	}
 
 	getIcon() {
@@ -40,12 +78,19 @@ export class BrowserView extends ItemView {
 	}
 
 	getState() {
-		return { ...super.getState(), url: this.url };
+		return {
+			...super.getState(),
+			tabs: this.tabs.map((t): SavedTab => ({ url: t.url, title: t.title })),
+			active: this.active ? this.tabs.indexOf(this.active) : 0,
+		};
 	}
 
 	async setState(state: unknown, result: ViewStateResult) {
-		const url = (state as { url?: unknown } | null)?.url;
-		if (typeof url === 'string' && url !== this.url) this.navigate(url);
+		const saved = parseState(state);
+		if (saved) {
+			if (this.tabsEl) this.restore(saved);
+			else this.pending = saved;
+		}
 		await super.setState(state, result);
 	}
 
@@ -58,121 +103,151 @@ export class BrowserView extends ItemView {
 		root.empty();
 		root.addClass('web-browser');
 
+		const tabBar = root.createDiv({ cls: 'web-browser-tabbar' });
+		this.tabsEl = tabBar.createDiv({ cls: 'web-browser-tabs' });
+		this.button(tabBar, 'plus', 'New tab', () => this.newTab());
+
 		const bar = root.createDiv({ cls: 'web-browser-toolbar' });
-		this.backEl = this.button(bar, 'arrow-left', 'Back', () => this.webview.goBack());
-		this.forwardEl = this.button(bar, 'arrow-right', 'Forward', () => this.webview.goForward());
-		this.reloadEl = this.button(bar, 'rotate-cw', 'Reload', () =>
-			this.loading ? this.webview.stop() : this.webview.reload(),
-		);
+		this.backEl = this.button(bar, 'arrow-left', 'Back', () => this.active?.webview.goBack());
+		this.forwardEl = this.button(bar, 'arrow-right', 'Forward', () => this.active?.webview.goForward());
+		this.reloadEl = this.button(bar, 'rotate-cw', 'Reload', () => {
+			const tab = this.active;
+			if (tab?.loading) tab.webview.stop();
+			else if (tab?.ready) tab.webview.reload();
+		});
 		this.addressEl = bar.createEl('input', {
 			type: 'text',
 			cls: 'web-browser-address',
 			attr: { placeholder: 'Search or enter address', spellcheck: 'false' },
 		});
 		this.registerDomEvent(this.addressEl, 'focus', () => this.addressEl.select());
+		this.registerDomEvent(this.addressEl, 'input', () => {
+			if (this.active) this.active.typed = this.addressEl.value;
+		});
 		this.registerDomEvent(this.addressEl, 'keydown', (e) => {
+			const tab = this.active;
+			if (!tab) return;
 			if (e.key === 'Enter') {
 				const url = toUrl(this.addressEl.value);
 				if (url) {
-					this.navigate(url);
-					this.webview.focus();
+					tab.navigate(url);
+					tab.webview.focus();
 				}
 			} else if (e.key === 'Escape') {
 				// Keep Obsidian from also handling Esc (it switched to another tab).
 				e.preventDefault();
 				e.stopPropagation();
+				tab.typed = null;
 				// Blur first: showUrl skips the address bar while it has focus.
 				this.addressEl.blur();
 				this.showUrl();
 			}
 		});
 
-		// partition and allowpopups only take effect if set before the webview is attached.
-		// Created detached in this leaf's window, then appended below.
-		// No src until there is a real URL: an initial about:blank load can finish after
-		// setState has restored the saved URL and overwrite it.
-		const webview = root.ownerDocument.win.createEl('webview', {
-			cls: 'web-browser-webview',
-			attr: { partition: this.plugin.partition, allowpopups: '' },
-		});
-		if (this.url !== BLANK) webview.setAttribute('src', this.url);
-		this.webview = webview;
-
-		const on = (type: string, fn: (e: WebviewEvent) => void) =>
-			webview.addEventListener(type, (e) => fn(e as WebviewEvent));
-		on('dom-ready', () => this.onFirstReady());
-		on('did-start-loading', () => this.setLoading(true));
-		on('did-stop-loading', () => this.setLoading(false));
-		on('did-navigate', (e) => this.onNavigate(e.url));
-		on('did-navigate-in-page', (e) => e.isMainFrame && this.onNavigate(e.url));
-		on('page-title-updated', (e) => {
-			this.title = e.title ?? '';
-			this.updateHeader();
-		});
-
-		root.appendChild(webview);
-		this.updateButtons();
+		this.pagesEl = root.createDiv({ cls: 'web-browser-pages' });
+		this.restore(this.pending ?? { tabs: [{ url: BLANK, title: '' }], active: 0 });
+		this.pending = null;
 	}
 
 	async onClose() {
+		this.tabs = [];
+		this.active = null;
+		this.tabsEl = null;
 		this.contentEl.empty();
 	}
 
-	private navigate(url: string) {
-		this.url = url;
-		if (!this.webview) return; // onOpen will load this.url
-		// loadURL throws until the first dom-ready; before that, swapping src is enough.
-		// Rejections are aborted or failed loads (for example ERR_ABORTED when a new navigation starts).
-		if (this.ready) this.webview.loadURL(url).catch(() => {});
-		else this.webview.setAttribute('src', url);
-		this.showUrl();
+	openTab(url: string, activate: boolean, after?: BrowserTab, title = '') {
+		if (!this.tabsEl) return;
+		const index = after ? this.tabs.indexOf(after) + 1 : this.tabs.length;
+		const tab = new BrowserTab(this, this.tabsEl, this.pagesEl, index, url, title);
+		this.tabs.splice(index, 0, tab);
+		if (activate) this.activate(tab);
+		void this.app.workspace.requestSaveLayout();
+		return tab;
 	}
 
-	private onFirstReady() {
-		if (this.ready) return;
-		this.ready = true;
-		// Popups (target=_blank, window.open) load in this view instead of opening a new window.
-		const contents = getRemote()?.webContents.fromId(this.webview.getWebContentsId());
-		contents?.setWindowOpenHandler(({ url }) => {
-			this.navigate(url);
-			return { action: 'deny' };
-		});
-		this.updateButtons();
+	newTab() {
+		this.openTab(BLANK, true);
+		this.focusAddress();
 	}
 
-	private onNavigate(url: string | undefined) {
-		if (!url) return;
-		this.url = url;
-		if (url === BLANK) {
-			this.title = '';
-			this.updateHeader();
+	closeTab(tab: BrowserTab) {
+		const index = this.tabs.indexOf(tab);
+		if (index < 0) return;
+		// Closing the last tab closes the panel, like closing a browser window.
+		if (this.tabs.length === 1) {
+			this.leaf.detach();
+			return;
 		}
-		this.showUrl();
-		this.updateButtons();
+		tab.destroy();
+		this.tabs.splice(index, 1);
+		if (tab === this.active) {
+			this.active = null;
+			this.activate(this.tabs[Math.min(index, this.tabs.length - 1)]!);
+		}
 		void this.app.workspace.requestSaveLayout();
 	}
 
-	private setLoading(loading: boolean) {
-		this.loading = loading;
+	activate(tab: BrowserTab) {
+		if (tab === this.active) return;
+		this.active?.setActive(false);
+		this.active = tab;
+		tab.setActive(true);
+		this.showUrl(true);
 		this.updateButtons();
+		this.updateHeader();
+		void this.app.workspace.requestSaveLayout();
 	}
 
-	private showUrl() {
-		if (this.addressEl.ownerDocument.activeElement === this.addressEl) return;
-		this.addressEl.value = this.url === BLANK ? '' : this.url;
+	/** Called by a tab when its URL, title, favicon or loading state changes. */
+	onTabChange(tab: BrowserTab, save: boolean) {
+		if (save) void this.app.workspace.requestSaveLayout();
+		if (tab !== this.active) return;
+		this.showUrl();
+		this.updateButtons();
+		this.updateHeader();
+	}
+
+	private restore(saved: SavedTabs) {
+		// Obsidian can pass back the state it already has; do not reload every page for that.
+		const same =
+			saved.tabs.length === this.tabs.length && saved.tabs.every((t, i) => t.url === this.tabs[i]!.url);
+		if (same) return;
+		for (const tab of this.tabs) tab.destroy();
+		this.tabs = [];
+		this.active = null;
+		for (const t of saved.tabs) this.openTab(t.url, false, undefined, t.title);
+		const active = this.tabs[Math.min(Math.max(saved.active, 0), this.tabs.length - 1)];
+		if (active) this.activate(active);
+	}
+
+	private showUrl(force = false) {
+		const tab = this.active;
+		if (!tab || (!force && this.addressEl.ownerDocument.activeElement === this.addressEl)) return;
+		this.addressEl.value = tab.typed ?? (tab.url === BLANK ? '' : tab.url);
 	}
 
 	private updateButtons() {
-		this.backEl.disabled = !this.ready || !this.webview.canGoBack();
-		this.forwardEl.disabled = !this.ready || !this.webview.canGoForward();
-		setIcon(this.reloadEl, this.loading ? 'x' : 'rotate-cw');
-		setTooltip(this.reloadEl, this.loading ? 'Stop' : 'Reload');
+		const tab = this.active;
+		this.backEl.disabled = !tab?.ready || !tab.webview.canGoBack();
+		this.forwardEl.disabled = !tab?.ready || !tab.webview.canGoForward();
+		const loading = !!tab?.loading;
+		setIcon(this.reloadEl, loading ? 'x' : 'rotate-cw');
+		setTooltip(this.reloadEl, loading ? 'Stop' : 'Reload');
 	}
 
 	private updateHeader() {
-		// Neither is in the public API. updateHeader refreshes the tab title, titleEl is the view header title.
-		(this as unknown as { titleEl?: HTMLElement }).titleEl?.setText(this.getDisplayText());
-		(this.leaf as unknown as { updateHeader?: () => void }).updateHeader?.();
+		// None of these are in the public API. updateHeader refreshes the Obsidian tab title,
+		// titleEl is the view header title, tabHeaderInnerIconEl is the Obsidian tab icon.
+		const title = this.getDisplayText();
+		const favicon = this.active?.favicon ?? '';
+		if (title === this.header.title && favicon === this.header.favicon) return;
+		this.header = { title, favicon };
+		(this as unknown as { titleEl?: HTMLElement }).titleEl?.setText(title);
+		const leaf = this.leaf as unknown as { updateHeader?: () => void; tabHeaderInnerIconEl?: HTMLElement };
+		leaf.updateHeader?.();
+		// Set after updateHeader, which may reset the icon to getIcon().
+		if (leaf.tabHeaderInnerIconEl) setFavicon(leaf.tabHeaderInnerIconEl, favicon);
 	}
 
 	private button(parent: HTMLElement, icon: string, label: string, onClick: () => void) {
