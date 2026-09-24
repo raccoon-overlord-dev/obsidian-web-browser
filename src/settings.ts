@@ -63,6 +63,11 @@ export class WebBrowserSettingTab extends PluginSettingTab {
 				},
 			},
 			{
+				name: 'Clip folder',
+				desc: 'Where "Clip page to vault" saves pages as notes. Leave empty for the vault root.',
+				control: { type: 'text', key: 'clipFolder', placeholder: 'Web clips' },
+			},
+			{
 				name: 'Show the website icon on the Obsidian tab',
 				desc: 'Otherwise the Obsidian tab shows a globe.',
 				control: { type: 'toggle', key: 'faviconInTab' },

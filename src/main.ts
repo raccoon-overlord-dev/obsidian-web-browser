@@ -19,6 +19,8 @@ interface WebBrowserData {
 	faviconInTab: boolean;
 	/** Where http/https links clicked in notes open. */
 	openLinksIn: 'browser' | 'system';
+	/** Vault folder for clipped pages. */
+	clipFolder: string;
 	bookmarks: Bookmark[];
 }
 
@@ -39,6 +41,7 @@ const DEFAULTS: WebBrowserData = {
 	websiteTheme: 'auto',
 	faviconInTab: true,
 	openLinksIn: 'browser',
+	clipFolder: 'Web clips',
 	bookmarks: [],
 };
 
@@ -120,6 +123,24 @@ export default class WebBrowserPlugin extends Plugin {
 				const view = this.app.workspace.getActiveViewOfType(BrowserView);
 				if (view && !checking) view.newTab();
 				return !!view;
+			},
+		});
+		this.addCommand({
+			id: 'find-in-page',
+			name: 'Find in page',
+			checkCallback: (checking) => {
+				const view = this.app.workspace.getActiveViewOfType(BrowserView);
+				if (view && !checking) view.openFind();
+				return !!view;
+			},
+		});
+		this.addCommand({
+			id: 'clip-page',
+			name: 'Clip current page to vault',
+			checkCallback: (checking) => {
+				const view = this.app.workspace.getActiveViewOfType(BrowserView);
+				if (view?.currentPage() && !checking) void view.clipPage();
+				return !!view?.currentPage();
 			},
 		});
 		this.addCommand({

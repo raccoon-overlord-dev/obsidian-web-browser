@@ -239,3 +239,26 @@
 	display: flex;
 	gap: var(--size-4-2);
 }
+
+.web-browser-find {
+	display: flex;
+	align-items: center;
+	gap: var(--size-4-1);
+	padding: var(--size-4-1) var(--size-4-2);
+	border-bottom: var(--border-width) solid var(--background-modifier-border);
+}
+
+.web-browser-find:not(.is-visible) {
+	display: none;
+}
+
+.web-browser-find-input {
+	flex: 0 1 20em;
+	min-width: 0;
+}
+
+.web-browser-find-count {
+	min-width: 5em;
+	color: var(--text-muted);
+	font-size: var(--font-ui-small);
+}

@@ -100,6 +100,10 @@ export class BrowserTab {
 		this.el.addEventListener('auxclick', (e) => {
 			if (e.button === 1) view.closeTab(this);
 		});
+		this.el.addEventListener('contextmenu', (e) => {
+			e.preventDefault();
+			view.openTabMenu(this, e);
+		});
 		tabsEl.insertBefore(this.el, tabsEl.children[index] ?? null);
 
 		// partition and allowpopups only take effect if set before the webview is attached.
@@ -141,6 +145,9 @@ export class BrowserTab {
 			if (e.reason === 'clean-exit') return;
 			this.error = { title: 'This page crashed', detail: 'Reload to try again.' };
 			this.changed(false);
+		});
+		on('found-in-page', (e) => {
+			if (e.result) this.view.onFound(this, e.result);
 		});
 		on('media-started-playing', () => this.updateAudio());
 		on('media-paused', () => this.updateAudio());
@@ -323,6 +330,7 @@ export class BrowserTab {
 		const key = input.key.toLowerCase();
 		if (key === 't') this.view.newTab();
 		else if (key === 'w') this.view.closeTab(this);
+		else if (key === 'f') this.view.openFind();
 	}
 
 	private onNavigate(url: string | undefined) {
@@ -330,6 +338,12 @@ export class BrowserTab {
 		this.url = url;
 		if (url === BLANK) this.title = '';
 		this.changed(true);
+	}
+
+	/** Runs `code` in an isolated world of the page (not visible to its scripts) and returns the result. */
+	runInPage(code: string): Promise<unknown> {
+		if (!this.contents) return Promise.reject(new Error('The page is not loaded yet.'));
+		return this.contents.executeJavaScriptInIsolatedWorld(ISOLATED_WORLD, [{ code }]);
 	}
 
 	/** Loads the current page again, also after a failed load or a crash. */

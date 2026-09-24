@@ -22,10 +22,20 @@ Commands (no default hotkeys; assign your own in **Settings → Hotkeys**):
 - **Open URL…**: type an address or a search.
 - **New tab**: in the active browser.
 - **Toggle bookmark for current page**
+- **Find in page**
+- **Clip current page to vault**
+
+In the tab bar, drag a tab to move it, double-click an empty spot for a new tab, and right-click a tab to duplicate, reload or close it.
+
+Inside a browser panel (including inside a page), **Ctrl/Cmd+T** opens a tab, **Ctrl/Cmd+W** closes it and **Ctrl/Cmd+F** finds text in the page. Outside the panel these keys keep their usual Obsidian behavior.
 
 Web links (`http`/`https`) clicked in your notes open as a new tab in Web Browser. Change this with **Open web links from notes in** in the plugin settings to use your default browser instead. Internal links and other link types are not affected.
 
 > **Note:** while this setting is on **Web Browser**, it takes priority over the core **Web viewer** plugin's "Open external links" option: links in notes open in Web Browser, not in Web viewer. To use Web viewer for links, set **Open web links from notes in** to **Default browser**.
+
+## Clipping pages
+
+**Clip page to vault** (menu or command) saves the current page as a Markdown note in the **Clip folder** (default `Web clips`) and opens it. If text is selected, only the selection is saved. Otherwise the plugin extracts the main article, like a reader mode, without menus, ads or footers. The page's title, address, author and dates are saved as note properties. Images stay links to the website.
 
 ## Logins
 
@@ -55,3 +65,5 @@ Imported bookmarks go into an "Imported from Chrome" folder, keeping Chrome's fo
 ## License
 
 [MIT](LICENSE)
+
+Includes [Readability](https://github.com/mozilla/readability) by Mozilla (Apache License 2.0) to extract articles when clipping.

@@ -15,6 +15,8 @@ export interface WebviewTag extends HTMLElement {
 	isAudioMuted(): boolean;
 	setAudioMuted(muted: boolean): void;
 	isCurrentlyAudible(): boolean;
+	findInPage(text: string, options: { forward: boolean; findNext: boolean }): number;
+	stopFindInPage(action: 'clearSelection' | 'keepSelection' | 'activateSelection'): void;
 }
 
 declare global {
@@ -37,6 +39,13 @@ export interface WebviewEvent extends Event {
 	errorDescription?: string;
 	validatedURL?: string;
 	reason?: string;
+	result?: FindResult;
+}
+
+export interface FindResult {
+	activeMatchOrdinal: number;
+	matches: number;
+	finalUpdate: boolean;
 }
 
 interface Session {

@@ -1,7 +1,8 @@
 import { ItemView, Menu, Scope, setIcon, setTooltip, ViewStateResult, WorkspaceLeaf } from 'obsidian';
 import { BookmarksModal } from './bookmarks';
 import { BLANK, BrowserTab, setFavicon, TabOptions } from './BrowserTab';
-import { getRemote } from './electron';
+import { clipPage } from './clip';
+import { FindResult, getRemote } from './electron';
 import type WebBrowserPlugin from './main';
 import type { WebsiteTheme } from './main';
 import { googleSignInBlocked, toUrl } from './url';
@@ -51,6 +52,9 @@ export class BrowserView extends ItemView {
 	private starEl!: HTMLButtonElement;
 	private noticeEl!: HTMLElement;
 	private noticeTarget = '';
+	private findEl!: HTMLElement;
+	private findInput!: HTMLInputElement;
+	private findCountEl!: HTMLElement;
 	private errorEl!: HTMLElement;
 	private errorTitleEl!: HTMLElement;
 	private errorDetailEl!: HTMLElement;
@@ -74,6 +78,10 @@ export class BrowserView extends ItemView {
 		});
 		this.scope.register(['Mod'], 'w', () => {
 			if (this.active) this.closeTab(this.active);
+			return false;
+		});
+		this.scope.register(['Mod'], 'f', () => {
+			this.openFind();
 			return false;
 		});
 	}
@@ -123,6 +131,10 @@ export class BrowserView extends ItemView {
 		const tabBar = root.createDiv({ cls: 'web-browser-tabbar' });
 		this.tabsEl = tabBar.createDiv({ cls: 'web-browser-tabs' });
 		this.listenForTabDrags(this.tabsEl);
+		// Double-click on the empty part of the tab bar opens a new tab, as in Chrome.
+		this.registerDomEvent(this.tabsEl, 'dblclick', (e) => {
+			if (e.target === e.currentTarget) this.newTab();
+		});
 		this.button(tabBar, 'plus', 'New tab', () => this.newTab());
 
 		const bar = root.createDiv({ cls: 'web-browser-toolbar' });
@@ -162,6 +174,29 @@ export class BrowserView extends ItemView {
 				// Blur first: showUrl skips the address bar while it has focus.
 				this.addressEl.blur();
 				this.showUrl();
+			}
+		});
+
+		// Find in page, for the active tab. Enter: next match, Shift+Enter: previous, Esc: close.
+		this.findEl = root.createDiv({ cls: 'web-browser-find' });
+		this.findInput = this.findEl.createEl('input', {
+			type: 'text',
+			cls: 'web-browser-find-input',
+			attr: { placeholder: 'Find in page', spellcheck: 'false' },
+		});
+		this.findCountEl = this.findEl.createSpan({ cls: 'web-browser-find-count' });
+		this.button(this.findEl, 'chevron-up', 'Previous match', () => this.find(false));
+		this.button(this.findEl, 'chevron-down', 'Next match', () => this.find(true));
+		this.button(this.findEl, 'x', 'Close', () => this.closeFind());
+		this.registerDomEvent(this.findInput, 'input', () => this.find(true, true));
+		this.registerDomEvent(this.findInput, 'keydown', (e) => {
+			if (e.key === 'Enter') {
+				e.preventDefault();
+				this.find(!e.shiftKey);
+			} else if (e.key === 'Escape') {
+				e.preventDefault();
+				e.stopPropagation();
+				this.closeFind();
 			}
 		});
 
@@ -253,13 +288,68 @@ export class BrowserView extends ItemView {
 
 	activate(tab: BrowserTab) {
 		if (tab === this.active) return;
+		if (this.active?.ready) this.active.webview.stopFindInPage('clearSelection');
 		this.active?.setActive(false);
 		this.active = tab;
 		tab.setActive(true);
 		this.showUrl(true);
 		this.updateButtons();
 		this.updateHeader();
+		if (this.findEl.hasClass('is-visible')) this.find(true, true);
 		void this.app.workspace.requestSaveLayout();
+	}
+
+	/** Right-click menu of a tab in the tab bar. */
+	openTabMenu(tab: BrowserTab, e: MouseEvent) {
+		const menu = new Menu();
+		menu.addItem((i) =>
+			i
+				.setTitle('Duplicate tab')
+				.setIcon('copy')
+				.onClick(() => this.openTab(tab.url, true, tab, { title: tab.title, zoom: tab.zoom, theme: tab.theme })),
+		);
+		menu.addItem((i) => i.setTitle('Reload').setIcon('rotate-cw').onClick(() => tab.retry()));
+		menu.addItem((i) => i.setTitle('Close tab').setIcon('x').onClick(() => this.closeTab(tab)));
+		menu.showAtMouseEvent(e);
+	}
+
+	openFind() {
+		this.findEl.addClass('is-visible');
+		this.findInput.focus();
+		this.findInput.select();
+		if (this.findInput.value) this.find(true, true);
+	}
+
+	/** Called by a tab with its find results. */
+	onFound(tab: BrowserTab, result: FindResult) {
+		if (tab !== this.active || !this.findEl.hasClass('is-visible')) return;
+		if (result.matches) this.findCountEl.setText(`${result.activeMatchOrdinal}/${result.matches}`);
+		else if (result.finalUpdate) this.findCountEl.setText('No matches');
+	}
+
+	async clipPage() {
+		const tab = this.active;
+		if (tab && tab.url !== BLANK) await clipPage(this.plugin, tab);
+	}
+
+	/** `restart` starts a new search (the text changed); otherwise moves to the next or previous match. */
+	private find(forward: boolean, restart = false) {
+		const tab = this.active;
+		if (!tab?.ready) return;
+		const text = this.findInput.value;
+		if (!text) {
+			tab.webview.stopFindInPage('clearSelection');
+			this.findCountEl.setText('');
+			return;
+		}
+		tab.webview.findInPage(text, { forward, findNext: restart });
+	}
+
+	private closeFind() {
+		if (this.active?.ready) this.active.webview.stopFindInPage('clearSelection');
+		this.findEl.removeClass('is-visible');
+		this.findCountEl.setText('');
+		this.active?.webview.focus();
 	}
 
 	/** Called by a tab when its URL, title, favicon or loading state changes. */
@@ -402,6 +492,15 @@ export class BrowserView extends ItemView {
 					.onClick(() => tab.setTheme(theme)),
 			);
 		}
+		menu.addSeparator();
+		menu.addItem((i) => i.setTitle('Find in page…').setIcon('search').onClick(() => this.openFind()));
+		menu.addItem((i) =>
+			i
+				.setTitle('Clip page to vault')
+				.setIcon('scissors')
+				.setDisabled(tab.url === BLANK)
+				.onClick(() => void this.clipPage()),
+		);
 		menu.addSeparator();
 		const starred = tab.url !== BLANK && this.plugin.isBookmarked(tab.url);
 		menu.addItem((i) =>
