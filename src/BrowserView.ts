@@ -4,7 +4,7 @@ import { BLANK, BrowserTab, setFavicon, TabOptions } from './BrowserTab';
 import { getRemote } from './electron';
 import type WebBrowserPlugin from './main';
 import type { WebsiteTheme } from './main';
-import { toUrl } from './url';
+import { googleSignInBlocked, toUrl } from './url';
 
 export const VIEW_TYPE_BROWSER = 'web-browser-view';
 
@@ -49,6 +49,10 @@ export class BrowserView extends ItemView {
 	private forwardEl!: HTMLButtonElement;
 	private reloadEl!: HTMLButtonElement;
 	private starEl!: HTMLButtonElement;
+	private noticeEl!: HTMLElement;
+	private noticeTarget = '';
+	/** Tab being dragged to a new position in the tab bar. */
+	private dragged: BrowserTab | null = null;
 	/** What the Obsidian tab header shows, to skip redundant (flickering) updates. */
 	private header = { title: '', favicon: '' };
 
@@ -115,6 +119,7 @@ export class BrowserView extends ItemView {
 
 		const tabBar = root.createDiv({ cls: 'web-browser-tabbar' });
 		this.tabsEl = tabBar.createDiv({ cls: 'web-browser-tabs' });
+		this.listenForTabDrags(this.tabsEl);
 		this.button(tabBar, 'plus', 'New tab', () => this.newTab());
 
 		const bar = root.createDiv({ cls: 'web-browser-toolbar' });
@@ -156,6 +161,14 @@ export class BrowserView extends ItemView {
 				this.showUrl();
 			}
 		});
+
+		// Shown while Google refuses sign-in in this embedded browser, with a way out.
+		this.noticeEl = root.createDiv({ cls: 'web-browser-notice' });
+		this.noticeEl.createSpan({
+			text: 'Google blocked sign-in in this embedded browser. Sign in with your default browser instead.',
+		});
+		const noticeButton = this.noticeEl.createEl('button', { cls: 'mod-cta', text: 'Open in default browser' });
+		this.registerDomEvent(noticeButton, 'click', () => void getRemote()?.shell.openExternal(this.noticeTarget));
 
 		this.pagesEl = root.createDiv({ cls: 'web-browser-pages' });
 		this.restore(this.pending ?? { tabs: [{ url: this.plugin.homeUrl }], active: 0 });
@@ -243,6 +256,52 @@ export class BrowserView extends ItemView {
 		this.updateHeader();
 	}
 
+	/** Drag a tab onto another one to move it before or after it (by which half the pointer is over). */
+	private listenForTabDrags(tabsEl: HTMLElement) {
+		const target = (e: DragEvent) => {
+			const el = (e.target as HTMLElement).closest('.web-browser-tab');
+			const tab = this.tabs.find((t) => t.el === el);
+			if (!tab || !this.dragged || tab === this.dragged) return null;
+			const rect = tab.el.getBoundingClientRect();
+			return { tab, after: e.clientX > rect.left + rect.width / 2 };
+		};
+		const clearMarks = () => {
+			for (const t of this.tabs) t.el.removeClass('drop-before', 'drop-after');
+		};
+		this.registerDomEvent(tabsEl, 'dragstart', (e) => {
+			this.dragged = this.tabs.find((t) => t.el === e.target) ?? null;
+			if (e.dataTransfer) e.dataTransfer.effectAllowed = 'move';
+		});
+		this.registerDomEvent(tabsEl, 'dragover', (e) => {
+			const drop = target(e);
+			if (!drop) return;
+			e.preventDefault();
+			clearMarks();
+			drop.tab.el.addClass(drop.after ? 'drop-after' : 'drop-before');
+		});
+		this.registerDomEvent(tabsEl, 'drop', (e) => {
+			const drop = target(e);
+			if (drop && this.dragged) {
+				e.preventDefault();
+				this.moveTab(this.dragged, drop.tab, drop.after);
+			}
+			clearMarks();
+		});
+		this.registerDomEvent(tabsEl, 'dragend', () => {
+			this.dragged = null;
+			clearMarks();
+		});
+	}
+
+	private moveTab(tab: BrowserTab, target: BrowserTab, after: boolean) {
+		this.tabs.splice(this.tabs.indexOf(tab), 1);
+		const index = this.tabs.indexOf(target) + (after ? 1 : 0);
+		this.tabs.splice(index, 0, tab);
+		// Only the tab bar entry moves. Moving a webview in the DOM would reload its page.
+		this.tabsEl?.insertBefore(tab.el, this.tabs[index + 1]?.el ?? null);
+		void this.app.workspace.requestSaveLayout();
+	}
+
 	private restore(saved: SavedTabs, force = false) {
 		// Obsidian can pass back the state it already has; do not reload every page for that.
 		const same =
@@ -269,6 +328,9 @@ export class BrowserView extends ItemView {
 		const loading = !!tab?.loading;
 		setIcon(this.reloadEl, loading ? 'x' : 'rotate-cw');
 		setTooltip(this.reloadEl, loading ? 'Stop' : 'Reload');
+		const blocked = tab ? googleSignInBlocked(tab.url) : null;
+		this.noticeTarget = blocked ?? '';
+		this.noticeEl.toggleClass('is-visible', !!blocked);
 		const bookmarkable = !!tab && tab.url !== BLANK;
 		const starred = bookmarkable && this.plugin.isBookmarked(tab.url);
 		this.starEl.disabled = !bookmarkable;

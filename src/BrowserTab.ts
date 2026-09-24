@@ -54,6 +54,7 @@ export class BrowserTab {
 	private labelEl: HTMLElement;
 	private audioEl: HTMLElement;
 	private shownFavicon: string | null = null;
+	private faviconSource = '';
 
 	constructor(
 		private view: BrowserView,
@@ -70,7 +71,7 @@ export class BrowserTab {
 		const win = tabsEl.ownerDocument.win;
 
 		// Listeners are plain addEventListener: they go away with the elements when the tab closes.
-		this.el = win.createDiv({ cls: 'web-browser-tab' });
+		this.el = win.createDiv({ cls: 'web-browser-tab', attr: { draggable: 'true' } });
 		this.iconEl = this.el.createSpan({ cls: 'web-browser-tab-icon' });
 		this.labelEl = this.el.createSpan({ cls: 'web-browser-tab-title' });
 		// Shown while the tab plays audio or is muted. Click to mute or unmute.
@@ -121,6 +122,7 @@ export class BrowserTab {
 		on('did-stop-loading', () => this.setLoading(false));
 		on('did-navigate', (e) => {
 			this.favicon = '';
+			this.faviconSource = '';
 			this.applyPageSettings();
 			this.onNavigate(e.url);
 		});
@@ -131,10 +133,7 @@ export class BrowserTab {
 			this.title = e.title ?? '';
 			this.changed(true);
 		});
-		on('page-favicon-updated', (e) => {
-			this.favicon = e.favicons?.[0] ?? '';
-			this.changed(false);
-		});
+		on('page-favicon-updated', (e) => void this.loadFavicon(e.favicons?.[0] ?? ''));
 		pagesEl.appendChild(this.webview);
 		this.render();
 		this.updateAudio();
@@ -215,10 +214,17 @@ export class BrowserTab {
 		this.ready = true;
 		const contents = getRemote()?.webContents.fromId(this.webview.getWebContentsId());
 		this.contents = contents;
-		// Popups (target=_blank, window.open) open as a new tab in this panel.
-		contents?.setWindowOpenHandler(({ url, disposition }) => {
+		// New windows. setWindowOpenHandler cannot be used: through remote its answer arrives too late,
+		// so it can only deny, and a denied window.open returns null, which breaks "Sign in with Google"
+		// pop-ups (Notion reports blocked pop-ups). So Electron creates every window, then:
+		// - links meant for a tab (target=_blank, Cmd/Ctrl/middle-click) become a tab here; the window
+		//   is destroyed right away.
+		// - real pop-ups (window.open with a size, disposition "new-window") stay a window, keeping the
+		//   opener link the sign-in flow needs. They share this tab's partition, so logins land here.
+		contents?.on('did-create-window', (win, { url, disposition }) => {
+			if (disposition === 'new-window') return win.removeMenu();
+			win.destroy();
 			if (this.ready) this.view.openTab(url, disposition !== 'background-tab', this);
-			return { action: 'deny' };
 		});
 		// Keys pressed inside the page never reach Obsidian's DOM, so the shortcuts are caught here.
 		contents?.on('before-input-event', (_e, input) => this.onKey(input));
@@ -231,6 +237,39 @@ export class BrowserTab {
 		if (!this.ready) return;
 		this.webview.setZoomFactor(this.zoom);
 		this.applyTheme();
+	}
+
+	/**
+	 * Fetches the favicon from inside the page and shows it as a data URL. Loading it straight from
+	 * Obsidian fails on sites that only serve it to themselves (YouTube), and would contact the site
+	 * outside this vault's partition.
+	 */
+	private async loadFavicon(url: string) {
+		this.faviconSource = url;
+		let data = '';
+		if (url && this.contents) {
+			const code = `(async () => {
+				const r = await fetch(${JSON.stringify(url)});
+				const b = await r.blob();
+				if (!r.ok || b.size > 262144) return '';
+				return await new Promise((done) => {
+					const f = new FileReader();
+					f.onload = () => done(f.result);
+					f.onerror = () => done('');
+					f.readAsDataURL(b);
+				});
+			})()`;
+			try {
+				const result = await this.contents.executeJavaScriptInIsolatedWorld(ISOLATED_WORLD, [{ code }]);
+				if (typeof result === 'string' && result.startsWith('data:image/')) data = result;
+			} catch {
+				// Blocked by the page (for example its content security policy). Fall back to the URL.
+			}
+		}
+		// A newer page or favicon arrived meanwhile.
+		if (this.faviconSource !== url) return;
+		this.favicon = data || url;
+		this.changed(false);
 	}
 
 	private updateAudio() {

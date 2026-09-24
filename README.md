@@ -12,6 +12,16 @@ This plugin uses Electron's `<webview>` and does not work on Obsidian mobile.
 
 The plugin loads the web pages you open and the search engine you choose. It contacts no other service, collects no telemetry and shows no ads.
 
+## Logins
+
+Logins persist between sessions. They are kept per vault, in Obsidian's app data on this computer, not inside the vault, so they do not sync between devices.
+
+Tested on macOS: GitHub, Gmail, Google Calendar and YouTube sign-in work, including Google's "tap yes on your phone" two-step check. Linux and Windows are not tested yet.
+
+- Google sign-in is best effort. Google can refuse sign-in from embedded browsers at any time. If it does, a bar above the page offers to continue in your default browser.
+- "Sign in with Google" buttons on other sites open Google in a small separate window, as in Chrome. It closes by itself when you are signed in.
+- Passkeys stored in a password manager extension are not available, since extensions are not supported.
+
 ## Bookmarks
 
 Add or remove the current page with the star in the address bar. Open, search and delete bookmarks from the menu (**Bookmarks…**). Bookmarks are stored in this plugin's `data.json` inside your vault.

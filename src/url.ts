@@ -23,3 +23,20 @@ export function toUrl(input: string, searchUrl: string = SEARCH_URL): string | n
 	if (HOST.test(text)) return (LOCAL_HOST.test(text) ? 'http://' : 'https://') + text;
 	return searchUrl + encodeURIComponent(text);
 }
+
+/**
+ * If `url` is Google's "This browser or app may not be secure" sign-in rejection page, returns where
+ * the user was trying to go (to finish in the default browser). Otherwise null.
+ */
+export function googleSignInBlocked(url: string): string | null {
+	let u: URL;
+	try {
+		u = new URL(url);
+	} catch {
+		return null;
+	}
+	// ponytail: matched by URL (/signin/rejected, /v3/signin/rejected, deniedsigninrejected); update if Google renames it.
+	if (u.hostname !== 'accounts.google.com' || !/rejected/i.test(u.pathname)) return null;
+	const next = u.searchParams.get('continue');
+	return next && /^https:\/\//i.test(next) ? next : 'https://accounts.google.com/';
+}

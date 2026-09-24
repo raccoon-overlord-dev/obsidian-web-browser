@@ -53,12 +53,15 @@ export interface KeyInput {
 	shift: boolean;
 }
 
+interface BrowserWindow {
+	destroy(): void;
+	removeMenu(): void;
+}
+
 export interface WebContents {
-	setWindowOpenHandler(
-		handler: (details: { url: string; disposition: string }) => { action: 'allow' | 'deny' },
-	): void;
 	on(event: 'before-input-event', listener: (event: unknown, input: KeyInput) => void): void;
 	on(event: 'audio-state-changed', listener: () => void): void;
+	on(event: 'did-create-window', listener: (window: BrowserWindow, details: { url: string; disposition: string }) => void): void;
 	executeJavaScriptInIsolatedWorld(worldId: number, scripts: { code: string }[]): Promise<unknown>;
 	debugger: {
 		isAttached(): boolean;

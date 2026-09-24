@@ -180,3 +180,28 @@
 .web-browser-bookmark-children {
 	padding-left: var(--size-4-5);
 }
+
+.web-browser-notice {
+	display: flex;
+	align-items: center;
+	gap: var(--size-4-2);
+	padding: var(--size-4-2);
+	background-color: var(--background-modifier-error);
+	color: var(--text-on-accent);
+}
+
+.web-browser-notice > span {
+	flex: 1;
+}
+
+.web-browser-notice:not(.is-visible) {
+	display: none;
+}
+
+.web-browser-tab.drop-before {
+	box-shadow: inset 2px 0 0 var(--interactive-accent);
+}
+
+.web-browser-tab.drop-after {
+	box-shadow: inset -2px 0 0 var(--interactive-accent);
+}
