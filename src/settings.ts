@@ -1,5 +1,6 @@
 import { App, Modal, PluginSettingTab, Setting, SettingDefinitionItem } from 'obsidian';
 import type WebBrowserPlugin from './main';
+import { IMPORT_FOLDER } from './chrome';
 import { SEARCH_ENGINES } from './url';
 
 export class ConfirmModal extends Modal {
@@ -56,6 +57,17 @@ export class WebBrowserSettingTab extends PluginSettingTab {
 				name: 'Show the website icon on the Obsidian tab',
 				desc: 'Otherwise the Obsidian tab shows a globe.',
 				control: { type: 'toggle', key: 'faviconInTab' },
+			},
+			{
+				type: 'group',
+				heading: 'Bookmarks',
+				items: [
+					{
+						name: 'Import bookmarks from Chrome',
+						desc: `Reads the bookmarks file of Google Chrome or Chromium on this computer, outside the vault. Read-only, and only when you import. Importing again replaces the "${IMPORT_FOLDER}" folder.`,
+						action: () => this.plugin.openChromeImport(),
+					},
+				],
 			},
 			{
 				type: 'group',

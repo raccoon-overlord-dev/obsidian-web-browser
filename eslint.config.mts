@@ -1,4 +1,5 @@
 import obsidianmd from 'eslint-plugin-obsidianmd';
+import { DEFAULT_BRANDS } from 'eslint-plugin-obsidianmd/dist/lib/rules/ui/brands.js';
 import globals from 'globals';
 import { globalIgnores, defineConfig } from 'eslint/config';
 
@@ -30,4 +31,13 @@ export default defineConfig(
 		},
 	},
 	...obsidianmd.configs.recommended,
+	{
+		// Same rule, plus the browser names the Chrome import mentions.
+		rules: {
+			'obsidianmd/ui/sentence-case': [
+				'warn',
+				{ brands: [...DEFAULT_BRANDS, 'Chrome', 'Chromium', 'Edge', 'Brave', 'Vivaldi'] },
+			],
+		},
+	},
 );

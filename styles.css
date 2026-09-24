@@ -105,3 +105,78 @@
 .web-browser-webview:not(.is-active) {
 	display: none;
 }
+
+.web-browser-star.is-bookmarked svg {
+	color: var(--color-yellow);
+	fill: currentColor;
+}
+
+.web-browser-bookmarks {
+	margin-top: var(--size-4-2);
+	max-height: 60vh;
+	overflow-y: auto;
+}
+
+.web-browser-bookmarks-empty {
+	padding: var(--size-4-2);
+	color: var(--text-muted);
+}
+
+.web-browser-bookmark-row {
+	display: flex;
+	align-items: center;
+	gap: var(--size-4-2);
+	padding: var(--size-4-1) var(--size-4-2);
+	border-radius: var(--radius-s);
+	cursor: pointer;
+}
+
+.web-browser-bookmark-row:hover {
+	background-color: var(--background-modifier-hover);
+}
+
+.web-browser-bookmark-icon {
+	display: flex;
+	flex-shrink: 0;
+	color: var(--text-muted);
+}
+
+.web-browser-bookmark-title {
+	flex-shrink: 0;
+	max-width: 60%;
+	overflow: hidden;
+	white-space: nowrap;
+	text-overflow: ellipsis;
+}
+
+.web-browser-bookmark-url {
+	flex: 1;
+	min-width: 0;
+	overflow: hidden;
+	white-space: nowrap;
+	text-overflow: ellipsis;
+	color: var(--text-faint);
+	font-size: var(--font-ui-smaller);
+}
+
+.web-browser-bookmark-delete {
+	flex-shrink: 0;
+	padding: 0;
+	visibility: hidden;
+}
+
+.web-browser-bookmark-row:hover .web-browser-bookmark-delete {
+	visibility: visible;
+}
+
+.web-browser-bookmark-folder > summary {
+	list-style: none;
+}
+
+.web-browser-bookmark-folder > summary::-webkit-details-marker {
+	display: none;
+}
+
+.web-browser-bookmark-children {
+	padding-left: var(--size-4-5);
+}

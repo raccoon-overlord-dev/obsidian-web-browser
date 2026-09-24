@@ -1,6 +1,8 @@
 import { Notice, Plugin } from 'obsidian';
+import { ChromeImportModal } from './bookmarks';
 import { BLANK } from './BrowserTab';
 import { BrowserView, VIEW_TYPE_BROWSER } from './BrowserView';
+import { Bookmark, IMPORT_FOLDER, parseBookmarksFile } from './chrome';
 import { getRemote } from './electron';
 import { ConfirmModal, WebBrowserSettingTab } from './settings';
 import { SEARCH_ENGINES, SEARCH_URL, SearchEngine, toUrl } from './url';
@@ -14,6 +16,17 @@ interface WebBrowserData {
 	homepage: string;
 	websiteTheme: WebsiteTheme;
 	faviconInTab: boolean;
+	bookmarks: Bookmark[];
+}
+
+function isBookmark(b: unknown): b is Bookmark {
+	const x = b as Partial<Bookmark> | null;
+	return (
+		typeof x?.url === 'string' &&
+		typeof x.title === 'string' &&
+		Array.isArray(x.folder) &&
+		x.folder.every((f) => typeof f === 'string')
+	);
 }
 
 const DEFAULTS: WebBrowserData = {
@@ -22,6 +35,7 @@ const DEFAULTS: WebBrowserData = {
 	homepage: '',
 	websiteTheme: 'auto',
 	faviconInTab: true,
+	bookmarks: [],
 };
 
 // Everything else (camera, mic, location, notifications, ...) is denied.
@@ -45,6 +59,8 @@ export default class WebBrowserPlugin extends Plugin {
 
 	async onload() {
 		this.settings = Object.assign({}, DEFAULTS, (await this.loadData()) as Partial<WebBrowserData>);
+		// data.json can be edited by hand; keep only well-formed bookmarks (and never share the DEFAULTS array).
+		this.settings.bookmarks = Array.isArray(this.settings.bookmarks) ? this.settings.bookmarks.filter(isBookmark) : [];
 		if (!this.settings.vaultKey) {
 			this.settings.vaultKey = crypto.randomUUID();
 			await this.saveData(this.settings);
@@ -118,6 +134,41 @@ export default class WebBrowserPlugin extends Plugin {
 				new Notice("This vault's browser identity was reset.");
 			},
 		).open();
+	}
+
+	isBookmarked(url: string) {
+		return this.settings.bookmarks.some((b) => b.url === url);
+	}
+
+	/** Star button: bookmarks the page at the top level, or removes every bookmark of it. */
+	async toggleBookmark(url: string, title: string) {
+		if (this.isBookmarked(url)) await this.removeBookmarks((b) => b.url === url);
+		else {
+			this.settings.bookmarks.push({ title: title || url, url, folder: [] });
+			await this.saveBookmarks();
+		}
+	}
+
+	async removeBookmarks(match: (b: Bookmark) => boolean) {
+		this.settings.bookmarks = this.settings.bookmarks.filter((b) => !match(b));
+		await this.saveBookmarks();
+	}
+
+	/** Replaces the "Imported from Chrome" folder. Throws, changing nothing, if the file cannot be parsed. */
+	async importChromeBookmarks(json: string) {
+		const imported = parseBookmarksFile(json, [IMPORT_FOLDER]);
+		this.settings.bookmarks = [...this.settings.bookmarks.filter((b) => b.folder[0] !== IMPORT_FOLDER), ...imported];
+		await this.saveBookmarks();
+		return imported.length;
+	}
+
+	openChromeImport() {
+		new ChromeImportModal(this.app, this).open();
+	}
+
+	private async saveBookmarks() {
+		await this.saveData(this.settings);
+		for (const view of this.views()) view.updateButtons();
 	}
 
 	private views() {

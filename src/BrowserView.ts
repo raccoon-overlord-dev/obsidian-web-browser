@@ -1,4 +1,5 @@
 import { ItemView, Menu, Scope, setIcon, setTooltip, ViewStateResult, WorkspaceLeaf } from 'obsidian';
+import { BookmarksModal } from './bookmarks';
 import { BLANK, BrowserTab, setFavicon, TabOptions } from './BrowserTab';
 import { getRemote } from './electron';
 import type WebBrowserPlugin from './main';
@@ -47,6 +48,7 @@ export class BrowserView extends ItemView {
 	private backEl!: HTMLButtonElement;
 	private forwardEl!: HTMLButtonElement;
 	private reloadEl!: HTMLButtonElement;
+	private starEl!: HTMLButtonElement;
 	/** What the Obsidian tab header shows, to skip redundant (flickering) updates. */
 	private header = { title: '', favicon: '' };
 
@@ -128,6 +130,8 @@ export class BrowserView extends ItemView {
 			cls: 'web-browser-address',
 			attr: { placeholder: 'Search or enter address', spellcheck: 'false' },
 		});
+		this.starEl = this.button(bar, 'star', 'Bookmark this page', () => this.toggleBookmark());
+		this.starEl.addClass('web-browser-star');
 		const menuEl = this.button(bar, 'menu', 'Menu', () => this.openMenu(menuEl));
 		this.registerDomEvent(this.addressEl, 'focus', () => this.addressEl.select());
 		this.registerDomEvent(this.addressEl, 'input', () => {
@@ -258,13 +262,30 @@ export class BrowserView extends ItemView {
 		this.addressEl.value = tab.typed ?? (tab.url === BLANK ? '' : tab.url);
 	}
 
-	private updateButtons() {
+	updateButtons() {
 		const tab = this.active;
 		this.backEl.disabled = !tab?.ready || !tab.webview.canGoBack();
 		this.forwardEl.disabled = !tab?.ready || !tab.webview.canGoForward();
 		const loading = !!tab?.loading;
 		setIcon(this.reloadEl, loading ? 'x' : 'rotate-cw');
 		setTooltip(this.reloadEl, loading ? 'Stop' : 'Reload');
+		const bookmarkable = !!tab && tab.url !== BLANK;
+		const starred = bookmarkable && this.plugin.isBookmarked(tab.url);
+		this.starEl.disabled = !bookmarkable;
+		this.starEl.toggleClass('is-bookmarked', starred);
+		setTooltip(this.starEl, starred ? 'Remove bookmark' : 'Bookmark this page');
+	}
+
+	private toggleBookmark() {
+		const tab = this.active;
+		if (tab && tab.url !== BLANK) void this.plugin.toggleBookmark(tab.url, tab.title);
+	}
+
+	private openBookmarks() {
+		new BookmarksModal(this.app, this.plugin, (url, newTab) => {
+			if (newTab) this.openTab(url, false, this.active ?? undefined);
+			else this.active?.navigate(url);
+		}).open();
 	}
 
 	private openMenu(anchor: HTMLElement) {
@@ -295,6 +316,22 @@ export class BrowserView extends ItemView {
 					.onClick(() => tab.setTheme(theme)),
 			);
 		}
+		menu.addSeparator();
+		const starred = tab.url !== BLANK && this.plugin.isBookmarked(tab.url);
+		menu.addItem((i) =>
+			i
+				.setTitle(starred ? 'Remove bookmark' : 'Bookmark this page')
+				.setIcon('star')
+				.setDisabled(tab.url === BLANK)
+				.onClick(() => this.toggleBookmark()),
+		);
+		menu.addItem((i) => i.setTitle('Bookmarks…').setIcon('bookmark').onClick(() => this.openBookmarks()));
+		menu.addItem((i) =>
+			i
+				.setTitle('Import bookmarks from Chrome…')
+				.setIcon('download')
+				.onClick(() => this.plugin.openChromeImport()),
+		);
 		menu.addSeparator();
 		menu.addItem((i) =>
 			i

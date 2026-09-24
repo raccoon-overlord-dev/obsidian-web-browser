@@ -5,6 +5,15 @@ import type { WebsiteTheme } from './main';
 
 export const BLANK = 'about:blank';
 
+// Mouse back/forward buttons (3 and 4). Chrome handles them in its browser UI, which Electron lacks,
+// and clicks inside a page never reach Obsidian. So each page gets this listener. It runs in an
+// isolated world, invisible to the page's own scripts; history is shared with the page.
+const MOUSE_NAVIGATION = `window.addEventListener('mouseup', (e) => {
+	if (e.button === 3) { e.preventDefault(); history.back(); }
+	else if (e.button === 4) { e.preventDefault(); history.forward(); }
+}, true);`;
+const ISOLATED_WORLD = 1001;
+
 // Chrome's zoom steps.
 const ZOOM_LEVELS = [0.25, 0.33, 0.5, 0.67, 0.75, 0.8, 0.9, 1, 1.1, 1.25, 1.5, 1.75, 2, 2.5, 3, 4, 5];
 
@@ -103,6 +112,10 @@ export class BrowserTab {
 		on('dom-ready', () => {
 			this.onFirstReady();
 			this.applyPageSettings();
+			this.contents
+				?.executeJavaScriptInIsolatedWorld(ISOLATED_WORLD, [{ code: MOUSE_NAVIGATION }])
+				// Fails on pages that run no scripts, such as Chromium's error pages. Nothing to do there.
+				.catch(() => {});
 		});
 		on('did-start-loading', () => this.setLoading(true));
 		on('did-stop-loading', () => this.setLoading(false));

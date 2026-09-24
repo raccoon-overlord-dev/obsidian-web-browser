@@ -59,6 +59,7 @@ export interface WebContents {
 	): void;
 	on(event: 'before-input-event', listener: (event: unknown, input: KeyInput) => void): void;
 	on(event: 'audio-state-changed', listener: () => void): void;
+	executeJavaScriptInIsolatedWorld(worldId: number, scripts: { code: string }[]): Promise<unknown>;
 	debugger: {
 		isAttached(): boolean;
 		attach(protocolVersion: string): void;
