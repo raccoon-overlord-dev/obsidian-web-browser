@@ -16,21 +16,19 @@ export function routeLinks(plugin: WebBrowserPlugin, win: Window) {
 	const enabled = (url: unknown): url is string =>
 		plugin.settings.openLinksIn === 'browser' && typeof url === 'string' && WEB_URL.test(url);
 
-	plugin.registerDomEvent(
-		win.document,
-		'click',
-		(e) => {
-			if (e.button !== 0) return;
-			const a = (e.target as HTMLElement | null)?.closest?.('a');
-			// Only links inside notes, not Obsidian's own UI (settings, plugin pages) or this plugin's views.
-			if (!a || !enabled(a.href) || !a.closest('.markdown-rendered, .cm-editor')) return;
-			e.preventDefault();
-			e.stopImmediatePropagation();
-			void plugin.openUrl(a.href);
-		},
-		// Capture, so Obsidian's own link handlers never see the click.
-		{ capture: true },
-	);
+	// Click opens the link in front; middle-click opens it in a background tab.
+	const onClick = (e: MouseEvent) => {
+		if (e.button !== 0 && e.button !== 1) return;
+		const a = (e.target as HTMLElement | null)?.closest?.('a');
+		// Only links inside notes, not Obsidian's own UI (settings, plugin pages) or this plugin's views.
+		if (!a || !enabled(a.href) || !a.closest('.markdown-rendered, .cm-editor')) return;
+		e.preventDefault();
+		e.stopImmediatePropagation();
+		void plugin.openUrl(a.href, e.button === 1);
+	};
+	// Capture, so Obsidian's own link handlers never see the click.
+	plugin.registerDomEvent(win.document, 'click', onClick, { capture: true });
+	plugin.registerDomEvent(win.document, 'auxclick', onClick, { capture: true });
 
 	// Bound, so restoring it on unload also leaves a working window.open.
 	const original = win.open.bind(win);

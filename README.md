@@ -34,7 +34,7 @@ Logins persist between sessions. They are kept per vault, in Obsidian's app data
 Tested on macOS: GitHub, Gmail, Google Calendar and YouTube sign-in work, including Google's "tap yes on your phone" two-step check. Linux and Windows are not tested yet.
 
 - Google sign-in is best effort. Google can refuse sign-in from embedded browsers at any time. If it does, a bar above the page offers to continue in your default browser.
-- "Sign in with Google" (or Apple, Microsoft…) buttons that open a pop-up window do not work: pop-ups open as a tab, and the site cannot finish the sign-in there (Notion, for example, reports blocked pop-ups). Use the site's email sign-in, or open the site in your default browser from the menu.
+- "Sign in with Google" (or Apple, Microsoft…) buttons open a small separate window, as in Chrome. It closes by itself when you are signed in. Tested with Notion and Figma. Links that open a new tab open as a tab in the panel.
 - Passkeys stored in a password manager extension are not available, since extensions are not supported.
 
 ## Bookmarks

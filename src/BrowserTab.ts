@@ -1,5 +1,5 @@
 import { Platform, setIcon, setTooltip } from 'obsidian';
-import { getRemote, KeyInput, WebContents, WebviewEvent, WebviewTag } from './electron';
+import { getRemote, KeyInput, PopupWindow, WebContents, WebviewEvent, WebviewTag } from './electron';
 import type { BrowserView } from './BrowserView';
 import type { WebsiteTheme } from './main';
 import { describeLoadError } from './url';
@@ -230,19 +230,42 @@ export class BrowserTab {
 		this.ready = true;
 		const contents = getRemote()?.webContents.fromId(this.webview.getWebContentsId());
 		this.contents = contents;
-		// Popups (target=_blank, window.open) open as a new tab in this panel. This handler must be set:
-		// without it Obsidian's own handler sends every new window to the system browser.
-		// Through remote the handler's return value arrives too late, so Electron always denies the
-		// window. A denied window.open returns null, so sign-in pop-ups that talk back to their opener
-		// ("Sign in with Google" on Notion) cannot work.
-		contents?.setWindowOpenHandler(({ url, disposition }) => {
+		// New windows. Obsidian installs a window-open handler on every web page that sends new windows
+		// to the system browser. A handler of our own does not help: through remote its answer arrives
+		// too late, so Electron always denies, and a denied window.open returns null, which breaks sign-in
+		// pop-ups that talk back to their opener ("Sign in with Google" on Notion).
+		// So clear the handler (null is sent as a plain value, no callback) and let Electron create the
+		// window, then:
+		// - real pop-ups (window.open with a size, disposition "new-window") stay a window, keeping the
+		//   opener link. They share this tab's partition, so logins land in this vault.
+		//   Empty ones too: the page opens them blank and sets their address afterwards.
+		// - anything meant for a tab (target=_blank, Cmd/Ctrl/middle-click) becomes a tab here and the
+		//   window is destroyed right away.
+		contents?.setWindowOpenHandler(null);
+		contents?.on('did-create-window', (win, { url, disposition }) => {
+			if (disposition === 'new-window' || !url || url === BLANK) return this.keepPopup(win, url);
+			win.destroy();
 			if (this.ready) this.view.openTab(url, disposition !== 'background-tab', this);
-			return { action: 'deny' };
 		});
 		// Keys pressed inside the page never reach Obsidian's DOM, so the shortcuts are caught here.
 		contents?.on('before-input-event', (_e, input) => this.onKey(input));
 		contents?.on('audio-state-changed', () => this.updateAudio());
 		this.changed(false);
+	}
+
+	/**
+	 * Obsidian treats every new window as its own: it attaches a will-navigate handler that blocks
+	 * leaving its pages, and its window-open handler. On a pop-up that leaves the page blank, so both
+	 * are removed. The first navigation was already blocked by then, so the pop-up's address is loaded
+	 * again. The window keeps its opener link, which the sign-in needs.
+	 */
+	private keepPopup(win: PopupWindow, url: string) {
+		win.removeMenu();
+		win.webContents.removeAllListeners('will-navigate');
+		win.webContents.setWindowOpenHandler(null);
+		if (url && url !== BLANK && !win.webContents.getURL()) {
+			win.loadURL(url).catch(() => {});
+		}
 	}
 
 	/** Zoom and theme are re-applied on every page load, since Chromium can reset them per site. */

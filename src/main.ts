@@ -95,15 +95,18 @@ export default class WebBrowserPlugin extends Plugin {
 		if (!url && leaf.view instanceof BrowserView) leaf.view.focusAddress();
 	}
 
-	/** Opens `url` as a new tab in the active browser, or else in any open browser, or else in a new one. */
-	async openUrl(url: string) {
+	/**
+	 * Opens `url` as a new tab in the active browser, or else in any open browser, or else in a new one.
+	 * `background` adds the tab without switching to it (middle-click).
+	 */
+	async openUrl(url: string, background = false) {
 		const leaves = this.app.workspace.getLeavesOfType(VIEW_TYPE_BROWSER);
 		const active = this.app.workspace.getActiveViewOfType(BrowserView)?.leaf;
 		const leaf = active ?? leaves[0];
 		if (!leaf) return this.openBrowser(url);
 		await leaf.loadIfDeferred();
-		await this.app.workspace.revealLeaf(leaf);
-		if (leaf.view instanceof BrowserView) leaf.view.openTab(url, true);
+		if (!background) await this.app.workspace.revealLeaf(leaf);
+		if (leaf.view instanceof BrowserView) leaf.view.openTab(url, !background);
 	}
 
 	private addCommands() {

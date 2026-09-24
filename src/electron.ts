@@ -57,12 +57,23 @@ export interface KeyInput {
 	shift: boolean;
 }
 
+export interface PopupWindow {
+	destroy(): void;
+	removeMenu(): void;
+	loadURL(url: string): Promise<void>;
+	webContents: {
+		getURL(): string;
+		removeAllListeners(event: string): void;
+		setWindowOpenHandler(handler: null): void;
+	};
+}
+
 export interface WebContents {
-	setWindowOpenHandler(
-		handler: (details: { url: string; disposition: string }) => { action: 'allow' | 'deny' },
-	): void;
+	/** Only null is used: see BrowserTab. */
+	setWindowOpenHandler(handler: null): void;
 	on(event: 'before-input-event', listener: (event: unknown, input: KeyInput) => void): void;
 	on(event: 'audio-state-changed', listener: () => void): void;
+	on(event: 'did-create-window', listener: (window: PopupWindow, details: { url: string; disposition: string }) => void): void;
 	executeJavaScriptInIsolatedWorld(worldId: number, scripts: { code: string }[]): Promise<unknown>;
 	debugger: {
 		isAttached(): boolean;
