@@ -2,7 +2,7 @@
 
 Browse the web inside Obsidian in a tabbed panel. Logins persist between sessions, and you can keep bookmarks or import them from Chrome.
 
-> Work in progress. Features are being added phase by phase (see `ROADMAP.md`).
+> Work in progress. Not yet published in the community plugin directory.
 
 ## Desktop only
 

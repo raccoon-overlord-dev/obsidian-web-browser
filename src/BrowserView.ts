@@ -78,17 +78,24 @@ export class BrowserView extends ItemView {
 					this.webview.focus();
 				}
 			} else if (e.key === 'Escape') {
-				this.showUrl();
+				// Keep Obsidian from also handling Esc (it switched to another tab).
+				e.preventDefault();
+				e.stopPropagation();
+				// Blur first: showUrl skips the address bar while it has focus.
 				this.addressEl.blur();
+				this.showUrl();
 			}
 		});
 
 		// partition and allowpopups only take effect if set before the webview is attached.
 		// Created detached in this leaf's window, then appended below.
+		// No src until there is a real URL: an initial about:blank load can finish after
+		// setState has restored the saved URL and overwrite it.
 		const webview = root.ownerDocument.win.createEl('webview', {
 			cls: 'web-browser-webview',
-			attr: { partition: this.plugin.partition, allowpopups: '', src: this.url },
+			attr: { partition: this.plugin.partition, allowpopups: '' },
 		});
+		if (this.url !== BLANK) webview.setAttribute('src', this.url);
 		this.webview = webview;
 
 		const on = (type: string, fn: (e: WebviewEvent) => void) =>
@@ -163,7 +170,8 @@ export class BrowserView extends ItemView {
 	}
 
 	private updateHeader() {
-		// Not in the public API, but it is how Obsidian refreshes the tab title.
+		// Neither is in the public API. updateHeader refreshes the tab title, titleEl is the view header title.
+		(this as unknown as { titleEl?: HTMLElement }).titleEl?.setText(this.getDisplayText());
 		(this.leaf as unknown as { updateHeader?: () => void }).updateHeader?.();
 	}
 
