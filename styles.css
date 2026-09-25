@@ -91,6 +91,18 @@
 	display: none;
 }
 
+/* Pinned tabs: icon only, no close button. */
+.web-browser-tab.is-pinned {
+	flex: 0 0 auto;
+	min-width: 0;
+	padding: var(--size-4-1) var(--size-4-2);
+}
+
+.web-browser-tab.is-pinned .web-browser-tab-title,
+.web-browser-tab.is-pinned .web-browser-tab-close {
+	display: none;
+}
+
 .web-browser-favicon {
 	width: var(--icon-s);
 	height: var(--icon-s);

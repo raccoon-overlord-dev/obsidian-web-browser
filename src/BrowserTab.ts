@@ -24,6 +24,8 @@ export interface TabOptions {
 	zoom?: number;
 	/** null follows the default website theme from the settings. */
 	theme?: WebsiteTheme | null;
+	/** Pinned tabs stay at the start of the tab bar, show only their icon and have no close button. */
+	pinned?: boolean;
 }
 
 /** Shows a site favicon in `el`, falling back to the globe icon. */
@@ -50,6 +52,7 @@ export class BrowserTab {
 	error: { title: string; detail: string } | null = null;
 	zoom: number;
 	theme: WebsiteTheme | null;
+	pinned: boolean;
 	readonly el: HTMLElement;
 	readonly webview: WebviewTag;
 	private contents: WebContents | undefined;
@@ -71,6 +74,7 @@ export class BrowserTab {
 		this.title = options.title ?? '';
 		this.zoom = options.zoom ?? 1;
 		this.theme = options.theme ?? null;
+		this.pinned = options.pinned ?? false;
 		const win = tabsEl.ownerDocument.win;
 
 		// Listeners are plain addEventListener: they go away with the elements when the tab closes.
@@ -105,6 +109,7 @@ export class BrowserTab {
 			view.openTabMenu(this, e);
 		});
 		tabsEl.insertBefore(this.el, tabsEl.children[index] ?? null);
+		this.el.toggleClass('is-pinned', this.pinned);
 
 		// partition and allowpopups only take effect if set before the webview is attached.
 		// No src until there is a real URL: an initial about:blank load can finish after
@@ -175,6 +180,11 @@ export class BrowserTab {
 	setActive(active: boolean) {
 		this.el.toggleClass('is-active', active);
 		this.webview.toggleClass('is-active', active);
+	}
+
+	setPinned(pinned: boolean) {
+		this.pinned = pinned;
+		this.el.toggleClass('is-pinned', pinned);
 	}
 
 	zoomBy(steps: number) {

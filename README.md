@@ -46,7 +46,7 @@ Commands (no default hotkeys; assign your own in **Settings → Hotkeys**):
 - **Find in page**
 - **Clip current page to vault**
 
-In the tab bar, drag a tab to move it, double-click an empty spot for a new tab, and right-click a tab to duplicate, reload or close it.
+In the tab bar, drag a tab to move it, double-click an empty spot for a new tab, and right-click a tab to duplicate, pin, reload or close it. Pinned tabs stay at the start of the tab bar, show only the site icon and have no close button.
 
 Inside a browser panel (including inside a page), **Ctrl/Cmd+T** opens a tab, **Ctrl/Cmd+W** closes it and **Ctrl/Cmd+F** finds text in the page. Outside the panel these keys keep their usual Obsidian behavior.
 

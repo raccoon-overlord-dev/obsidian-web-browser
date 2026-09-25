@@ -30,7 +30,10 @@ function parseState(state: unknown): SavedTabs | null {
 				title: typeof t.title === 'string' ? t.title : '',
 				zoom: typeof t.zoom === 'number' && t.zoom > 0 ? t.zoom : 1,
 				theme: THEMES.includes(t.theme as WebsiteTheme) ? t.theme : null,
-			}));
+				pinned: t.pinned === true,
+			}))
+			// Pinned tabs come first.
+			.sort((a, b) => Number(b.pinned) - Number(a.pinned));
 		if (tabs.length) return { tabs, active: typeof s.active === 'number' ? s.active : 0 };
 	}
 	// State saved by earlier versions: a single URL.
@@ -105,7 +108,9 @@ export class BrowserView extends ItemView {
 	getState() {
 		return {
 			...super.getState(),
-			tabs: this.tabs.map((t): SavedTab => ({ url: t.url, title: t.title, zoom: t.zoom, theme: t.theme })),
+			tabs: this.tabs.map(
+				(t): SavedTab => ({ url: t.url, title: t.title, zoom: t.zoom, theme: t.theme, pinned: t.pinned }),
+			),
 			active: this.active ? this.tabs.indexOf(this.active) : 0,
 		};
 	}
@@ -235,7 +240,10 @@ export class BrowserView extends ItemView {
 
 	openTab(url: string, activate: boolean, after?: BrowserTab, options: TabOptions = {}) {
 		if (!this.tabsEl) return;
-		const index = after ? this.tabs.indexOf(after) + 1 : this.tabs.length;
+		// Pinned tabs stay in front of the others.
+		const pinnedCount = this.pinnedCount();
+		const wanted = after ? this.tabs.indexOf(after) + 1 : this.tabs.length;
+		const index = options.pinned ? Math.min(wanted, pinnedCount) : Math.max(wanted, pinnedCount);
 		const tab = new BrowserTab(this, this.tabsEl, this.pagesEl, index, url, options);
 		this.tabs.splice(index, 0, tab);
 		if (activate) this.activate(tab);
@@ -306,7 +314,15 @@ export class BrowserView extends ItemView {
 			i
 				.setTitle('Duplicate tab')
 				.setIcon('copy')
-				.onClick(() => this.openTab(tab.url, true, tab, { title: tab.title, zoom: tab.zoom, theme: tab.theme })),
+				.onClick(() =>
+					this.openTab(tab.url, true, tab, { title: tab.title, zoom: tab.zoom, theme: tab.theme, pinned: tab.pinned }),
+				),
+		);
+		menu.addItem((i) =>
+			i
+				.setTitle(tab.pinned ? 'Unpin tab' : 'Pin tab')
+				.setIcon(tab.pinned ? 'pin-off' : 'pin')
+				.onClick(() => this.togglePin(tab)),
 		);
 		menu.addItem((i) => i.setTitle('Reload').setIcon('rotate-cw').onClick(() => tab.retry()));
 		menu.addItem((i) => i.setTitle('Close tab').setIcon('x').onClick(() => this.closeTab(tab)));
@@ -366,7 +382,8 @@ export class BrowserView extends ItemView {
 		const target = (e: DragEvent) => {
 			const el = (e.target as HTMLElement).closest('.web-browser-tab');
 			const tab = this.tabs.find((t) => t.el === el);
-			if (!tab || !this.dragged || tab === this.dragged) return null;
+			// A tab only moves among the tabs with the same pinned state.
+			if (!tab || !this.dragged || tab === this.dragged || tab.pinned !== this.dragged.pinned) return null;
 			const rect = tab.el.getBoundingClientRect();
 			return { tab, after: e.clientX > rect.left + rect.width / 2 };
 		};
@@ -400,7 +417,22 @@ export class BrowserView extends ItemView {
 
 	private moveTab(tab: BrowserTab, target: BrowserTab, after: boolean) {
 		this.tabs.splice(this.tabs.indexOf(tab), 1);
-		const index = this.tabs.indexOf(target) + (after ? 1 : 0);
+		this.placeTab(tab, this.tabs.indexOf(target) + (after ? 1 : 0));
+	}
+
+	/** Pinning moves the tab to the end of the pinned tabs, unpinning to the start of the others, as in Chrome. */
+	private togglePin(tab: BrowserTab) {
+		this.tabs.splice(this.tabs.indexOf(tab), 1);
+		tab.setPinned(!tab.pinned);
+		this.placeTab(tab, this.pinnedCount());
+	}
+
+	private pinnedCount() {
+		return this.tabs.filter((t) => t.pinned).length;
+	}
+
+	/** Inserts a tab that is not in the list at `index`. */
+	private placeTab(tab: BrowserTab, index: number) {
 		this.tabs.splice(index, 0, tab);
 		// Only the tab bar entry moves. Moving a webview in the DOM would reload its page.
 		this.tabsEl?.insertBefore(tab.el, this.tabs[index + 1]?.el ?? null);
