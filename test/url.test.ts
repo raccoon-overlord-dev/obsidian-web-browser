@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { describeLoadError, googleSignInBlocked, SEARCH_ENGINES, toUrl } from '../src/url.ts';
+import { describeLoadError, googleSignInBlocked, linkTarget, SEARCH_ENGINES, toUrl } from '../src/url.ts';
 
 const S = 'https://search.test/?q=';
 
@@ -36,4 +36,20 @@ test('describeLoadError', () => {
 	assert.match(describeLoadError(-105, 'ERR_NAME_NOT_RESOLVED', 'https://nope.invalid/x').detail, /nope\.invalid/);
 	assert.equal(describeLoadError(-102, 'ERR_CONNECTION_REFUSED', 'http://localhost:9/').detail, 'localhost:9: ERR_CONNECTION_REFUSED.');
 	assert.equal(describeLoadError(-2, '', 'weird').detail, 'weird: error -2.');
+});
+
+test('linkTarget', () => {
+	// A plain click always follows the main setting.
+	assert.equal(linkTarget('browser', 'alternate', false), 'browser');
+	assert.equal(linkTarget('system', 'alternate', false), 'system');
+	assert.equal(linkTarget('browser', 'system', false), 'browser');
+	assert.equal(linkTarget('system', 'browser', false), 'system');
+	// Alternate is the opposite of the main setting.
+	assert.equal(linkTarget('browser', 'alternate', true), 'system');
+	assert.equal(linkTarget('system', 'alternate', true), 'browser');
+	// A fixed choice wins, even when it matches the main setting.
+	assert.equal(linkTarget('browser', 'browser', true), 'browser');
+	assert.equal(linkTarget('browser', 'system', true), 'system');
+	assert.equal(linkTarget('system', 'browser', true), 'browser');
+	assert.equal(linkTarget('system', 'system', true), 'system');
 });

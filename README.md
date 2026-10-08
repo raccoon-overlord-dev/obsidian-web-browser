@@ -22,7 +22,8 @@ Manually: download `main.js`, `manifest.json` and `styles.css` from the [latest 
 - **Search engine**: Google, DuckDuckGo, Bing, Brave, Startpage or Ecosia, for address bar text that is not a web address.
 - **Homepage**: the page new tabs open. Empty means a blank tab.
 - **Website theme**: Auto (follows Obsidian), light or dark. Each tab can override it from the menu.
-- **Open web links from notes in**: Web Browser or your default browser.
+- **Open web links from notes in**: Web Browser or your default browser
+  - **Alt + Click**: Defaults to the alternative of the above setting
 - **Clip folder**: where clipped pages are saved.
 - **Show the website icon on the Obsidian tab**
 - **Import bookmarks from Chrome**
@@ -51,6 +52,8 @@ In the tab bar, drag a tab to move it, double-click an empty spot for a new tab,
 Inside a browser panel (including inside a page), **Ctrl/Cmd+T** opens a tab, **Ctrl/Cmd+W** closes it and **Ctrl/Cmd+F** finds text in the page. Outside the panel these keys keep their usual Obsidian behavior.
 
 Web links (`http`/`https`) clicked in your notes open as a new tab in Web Browser. Change this with **Open web links from notes in** in the plugin settings to use your default browser instead. Internal links and other link types are not affected.
+
+Hold **Ctrl/⌘** while clicking to open the link in the other place: your default browser when links open in Web Browser, and Web Browser when they open in your default browser. The **Ctrl/⌘ + click** choice under **Open web links from notes in** can pin this to one of the two instead.
 
 > **Note:** while this setting is on **Web Browser**, it takes priority over the core **Web viewer** plugin's "Open external links" option: links in notes open in Web Browser, not in Web viewer. To use Web viewer for links, set **Open web links from notes in** to **Default browser**.
 

@@ -1,11 +1,12 @@
-import { App, Modal, TextComponent } from 'obsidian';
+import { App, Modal, Platform, TextComponent } from 'obsidian';
 import type WebBrowserPlugin from './main';
-import { toUrl } from './url';
+import { linkTarget, toUrl } from './url';
 
 const WEB_URL = /^https?:\/\//i;
 
 /**
- * Sends http/https links clicked in notes to the browser panel (when the setting says so).
+ * Sends http/https links clicked in notes to the browser panel (when the settings say so: one for a
+ * plain click, one for Ctrl/Cmd + click).
  * Two paths lead out of Obsidian, so both are covered for `win` (the main window or a pop-out):
  * - rendered links (reading view, embeds, callouts, canvas cards) are `<a href>` elements whose
  *   default click opens the system browser without calling `window.open`;
@@ -13,15 +14,18 @@ const WEB_URL = /^https?:\/\//i;
  * Internal links, `obsidian://` and every other scheme are left alone.
  */
 export function routeLinks(plugin: WebBrowserPlugin, win: Window) {
-	const enabled = (url: unknown): url is string =>
-		plugin.settings.openLinksIn === 'browser' && typeof url === 'string' && WEB_URL.test(url);
+	const isMod = (e: MouseEvent | KeyboardEvent) => (Platform.isMacOS ? e.metaKey : e.ctrlKey);
+	const enabled = (url: unknown, mod: boolean): url is string =>
+		typeof url === 'string' &&
+		WEB_URL.test(url) &&
+		linkTarget(plugin.settings.openLinksIn, plugin.settings.modClickLinksIn, mod) === 'browser';
 
 	// Click opens the link in front; middle-click opens it in a background tab.
 	const onClick = (e: MouseEvent) => {
 		if (e.button !== 0 && e.button !== 1) return;
 		const a = (e.target as HTMLElement | null)?.closest?.('a');
 		// Only links inside notes, not Obsidian's own UI (settings, plugin pages) or this plugin's views.
-		if (!a || !enabled(a.href) || !a.closest('.markdown-rendered, .cm-editor')) return;
+		if (!a || !enabled(a.href, isMod(e)) || !a.closest('.markdown-rendered, .cm-editor')) return;
 		e.preventDefault();
 		e.stopImmediatePropagation();
 		void plugin.openUrl(a.href, e.button === 1);
@@ -30,14 +34,22 @@ export function routeLinks(plugin: WebBrowserPlugin, win: Window) {
 	plugin.registerDomEvent(win.document, 'click', onClick, { capture: true });
 	plugin.registerDomEvent(win.document, 'auxclick', onClick, { capture: true });
 
+	// window.open gets no event, so remember whether Ctrl/Cmd was held for the last mouse press. Any
+	// key press clears it, so links followed from the keyboard count as a plain click.
+	let modPress = false;
+	plugin.registerDomEvent(win.document, 'mousedown', (e) => (modPress = isMod(e)), { capture: true });
+	plugin.registerDomEvent(win.document, 'keydown', () => (modPress = false), { capture: true });
+
 	// Bound, so restoring it on unload also leaves a working window.open.
 	const original = win.open.bind(win);
 	win.open = (url?: string | URL, target?: string, features?: string) => {
 		const href = url instanceof URL ? url.href : url;
 		// window.open is also used by Obsidian's own UI and other plugins. Only take it over while a
 		// note editor has focus, which is the case when a link in it was just clicked.
-		const fromEditor = !!win.document.activeElement?.closest('.cm-editor');
-		if (!fromEditor || !enabled(href)) return original(url, target, features);
+		const editor = win.document.activeElement?.closest('.cm-editor');
+		// Source mode only follows a link with Ctrl/Cmd held, so there it says nothing about the target.
+		const mod = modPress && !!editor?.closest('.is-live-preview');
+		if (!editor || !enabled(href, mod)) return original(url, target, features);
 		void plugin.openUrl(href);
 		return null;
 	};

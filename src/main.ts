@@ -6,7 +6,7 @@ import { Bookmark, IMPORT_FOLDER, parseBookmarksFile } from './chrome';
 import { getRemote } from './electron';
 import { OpenUrlModal, routeLinks } from './links';
 import { ConfirmModal, WebBrowserSettingTab } from './settings';
-import { SEARCH_ENGINES, SEARCH_URL, SearchEngine, toUrl } from './url';
+import { LinkTarget, SEARCH_ENGINES, SEARCH_URL, SearchEngine, toUrl } from './url';
 
 export type WebsiteTheme = 'auto' | 'light' | 'dark';
 
@@ -18,7 +18,9 @@ interface WebBrowserData {
 	websiteTheme: WebsiteTheme;
 	faviconInTab: boolean;
 	/** Where http/https links clicked in notes open. */
-	openLinksIn: 'browser' | 'system';
+	openLinksIn: LinkTarget;
+	/** Same, with Ctrl/Cmd held. 'alternate' is the opposite of `openLinksIn`. */
+	modClickLinksIn: LinkTarget | 'alternate';
 	/** Vault folder for clipped pages. */
 	clipFolder: string;
 	bookmarks: Bookmark[];
@@ -41,6 +43,7 @@ const DEFAULTS: WebBrowserData = {
 	websiteTheme: 'auto',
 	faviconInTab: true,
 	openLinksIn: 'browser',
+	modClickLinksIn: 'alternate',
 	clipFolder: 'Web clips',
 	bookmarks: [],
 };

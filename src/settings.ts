@@ -1,7 +1,11 @@
-import { App, Modal, PluginSettingTab, Setting, SettingDefinitionItem } from 'obsidian';
+import { App, DropdownComponent, Modal, Platform, PluginSettingTab, Setting, SettingDefinitionItem } from 'obsidian';
 import type WebBrowserPlugin from './main';
 import { IMPORT_FOLDER } from './chrome';
 import { SEARCH_ENGINES } from './url';
+
+const LINKS_NAME = 'Open web links from notes in';
+const LINKS_DESC =
+	'Where http and https links clicked in your notes open. Internal links are not affected. Alternate is the opposite of Click. In source mode, where following a link always needs Ctrl/Cmd, Click is used.';
 
 export class ConfirmModal extends Modal {
 	constructor(app: App, title: string, text: string, button: string, onConfirm: () => void | Promise<void>) {
@@ -54,12 +58,19 @@ export class WebBrowserSettingTab extends PluginSettingTab {
 				},
 			},
 			{
-				name: 'Open web links from notes in',
-				desc: 'Where http and https links clicked in your notes open. Internal links are not affected.',
-				control: {
-					type: 'dropdown',
-					key: 'openLinksIn',
-					options: { browser: 'Web Browser (new tab)', system: 'Default browser' },
+				name: LINKS_NAME,
+				desc: LINKS_DESC,
+				aliases: ['Ctrl + click', 'Cmd + click'],
+				// One row with two dropdowns: a plain click, and a click with Ctrl/Cmd held.
+				render: (setting) => {
+					setting.setName(LINKS_NAME).setDesc(LINKS_DESC);
+					setting.controlEl.addClass('web-browser-link-targets');
+					const targets = { browser: 'Web Browser (new tab)', system: 'Default browser' };
+					this.addLinkTarget(setting, 'Click', 'openLinksIn', targets);
+					this.addLinkTarget(setting, `${Platform.isMacOS ? '⌘' : 'Ctrl'} + click`, 'modClickLinksIn', {
+						alternate: 'Alternate',
+						...targets,
+					});
 				},
 			},
 			{
@@ -100,6 +111,14 @@ export class WebBrowserSettingTab extends PluginSettingTab {
 				],
 			},
 		];
+	}
+
+	private addLinkTarget(setting: Setting, label: string, key: string, options: Record<string, string>) {
+		const row = setting.controlEl.createEl('label', { cls: 'web-browser-link-target', text: label });
+		new DropdownComponent(row)
+			.addOptions(options)
+			.setValue(String(this.getControlValue(key)))
+			.onChange((value) => void this.setControlValue(key, value));
 	}
 
 	async setControlValue(key: string, value: unknown) {
