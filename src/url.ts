@@ -24,6 +24,18 @@ export function toUrl(input: string, searchUrl: string = SEARCH_URL): string | n
 	return searchUrl + encodeURIComponent(text);
 }
 
+export type LinkTarget = 'browser' | 'system';
+
+/**
+ * Where a web link clicked in a note opens. `mod` is whether Ctrl/Cmd was held. `modClick` is the
+ * setting for that case: a fixed target, or 'alternate' for the opposite of the main setting.
+ */
+export function linkTarget(main: LinkTarget, modClick: LinkTarget | 'alternate', mod: boolean): LinkTarget {
+	if (!mod) return main;
+	if (modClick !== 'alternate') return modClick;
+	return main === 'browser' ? 'system' : 'browser';
+}
+
 /**
  * If `url` is Google's "This browser or app may not be secure" sign-in rejection page, returns where
  * the user was trying to go (to finish in the default browser). Otherwise null.

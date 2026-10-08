@@ -274,3 +274,28 @@
 	color: var(--text-muted);
 	font-size: var(--font-ui-small);
 }
+
+/* A grid, so both dropdowns share the width of the wider one. */
+.web-browser-link-targets {
+	display: grid;
+	grid-template-columns: auto auto;
+	align-items: center;
+	gap: var(--size-4-2);
+	color: var(--text-muted);
+	font-size: var(--font-ui-small);
+	text-align: right;
+	white-space: nowrap;
+	flex-shrink: 0;
+}
+
+.web-browser-link-target {
+	display: contents;
+}
+
+/* Specific enough to beat Obsidian's own dropdown sizing. */
+.web-browser-link-targets .web-browser-link-target select.dropdown {
+	justify-self: stretch;
+	box-sizing: border-box;
+	width: 100%;
+	max-width: none;
+}
